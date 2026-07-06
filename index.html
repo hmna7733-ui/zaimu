@@ -439,19 +439,19 @@ function seedData(){
     debts:[
       {
         id: uid(), name:'楽天カード', type:'card', lender:'楽天カード株式会社',
-        initialAmount: 500000, balance: 320000, interestRate: 15.0,
+        initialAmount: 500000, balance: 320000, interestType:'rate', interestRate: 15.0, interestFixedAmount:0,
         monthlyPlanned: 30000, dueDay: 27,
         startDate: start.toISOString().slice(0,10), notes:'リボ払い分'
       },
       {
         id: uid(), name:'父からの借入', type:'person', lender:'父',
-        initialAmount: 800000, balance: 500000, interestRate: 0,
+        initialAmount: 800000, balance: 500000, interestType:'none', interestRate: 0, interestFixedAmount:0,
         monthlyPlanned: 20000, dueDay: 5,
         startDate: start.toISOString().slice(0,10), notes:'開業資金の一部'
       },
       {
         id: uid(), name:'運転資金 借入', type:'company', lender:'〇〇商事株式会社',
-        initialAmount: 1500000, balance: 1200000, interestRate: 3.0,
+        initialAmount: 1500000, balance: 1200000, interestType:'rate', interestRate: 3.0, interestFixedAmount:0,
         monthlyPlanned: 50000, dueDay: 15,
         startDate: start.toISOString().slice(0,10), notes:''
       }
@@ -475,6 +475,12 @@ function ensureTypes(state){
       {id:'company', label:'法人', color:'#6B4C9A'},
     ];
   }
+  (state.debts||[]).forEach(d=>{
+    if(!d.interestType){
+      d.interestType = d.interestRate ? 'rate' : 'none';
+    }
+    if(d.interestFixedAmount===undefined) d.interestFixedAmount = 0;
+  });
   return state;
 }
 
@@ -835,8 +841,26 @@ function monthsToPayoff(balance, annualRatePct, monthlyPayment){
   }
   return {months, totalInterest};
 }
+function projectPayoff(d, extraMonthly=0){
+  const balance = d.balance;
+  const monthly = d.monthlyPlanned + extraMonthly;
+  const type = d.interestType || (d.interestRate ? 'rate' : 'none');
+  if(balance<=0) return {months:0, totalInterest:0};
+  if(type==='fixed'){
+    const principalPortion = monthly - (d.interestFixedAmount||0);
+    if(principalPortion<=0) return {impossible:true};
+    const months = Math.ceil(balance/principalPortion);
+    return {months, totalInterest: (d.interestFixedAmount||0)*months};
+  }
+  if(type==='none'){
+    if(monthly<=0) return {impossible:true};
+    const months = Math.ceil(balance/monthly);
+    return {months, totalInterest:0};
+  }
+  return monthsToPayoff(balance, d.interestRate||0, monthly);
+}
 function payoffDateForDebt(d, extra=0){
-  const r = monthsToPayoff(d.balance, d.interestRate, d.monthlyPlanned+extra);
+  const r = projectPayoff(d, extra);
   if(r.impossible) return null;
   return addMonths(todayISO(), r.months);
 }
@@ -876,6 +900,12 @@ function hexToRgba(hex, alpha){
   const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+function interestLabelForDebt(d){
+  const type = d.interestType || (d.interestRate ? 'rate' : 'none');
+  if(type==='fixed') return `利息確定型（月${fmtYen(d.interestFixedAmount||0)}）`;
+  if(type==='rate' && d.interestRate) return `金利 ${d.interestRate}%`;
+  return '無利息';
+}
 
 function genreTotals(){
   return (state.types||[]).map(ty=>{
@@ -890,36 +920,6 @@ function genreTotals(){
       initial: list.reduce((s,d)=>s+d.initialAmount,0),
     };
   });
-}
-
-/* portfolio simulation: snowball / avalanche with extra monthly budget */
-function simulatePortfolio(extraBudget, strategy){
-  let list = state.debts.map(d=>({id:d.id, name:d.name, bal:d.balance, rate:d.interestRate||0, min:d.monthlyPlanned, paidMonth:null}));
-  let months = 0;
-  const orderFn = ()=> list.filter(d=>d.bal>0.5).sort((a,b)=> strategy==='avalanche' ? b.rate-a.rate : a.bal-b.bal);
-  while(list.some(d=>d.bal>0.5) && months<480){
-    months++;
-    // accrue interest & minimum payments
-    list.forEach(d=>{
-      if(d.bal<=0.5) return;
-      const r = d.rate/100/12;
-      d.bal += d.bal*r;
-      const pay = Math.min(d.min, d.bal);
-      d.bal -= pay;
-    });
-    // allocate extra to priority target
-    let avail = extraBudget;
-    for(const d of orderFn()){
-      if(avail<=0) break;
-      const pay = Math.min(avail, d.bal);
-      d.bal -= pay;
-      avail -= pay;
-    }
-    list.forEach(d=>{
-      if(d.bal<=0.5 && d.paidMonth===null){ d.paidMonth = months; d.bal = 0; }
-    });
-  }
-  return list;
 }
 
 /* =========================================================
@@ -949,7 +949,7 @@ function renderTopbar(){
   const titles = {
     dashboard:['ダッシュボード','借入全体の状況をひと目で確認'],
     debts:['借入一覧','カード・個人・法人からの借入をまとめて管理'],
-    sim:['返済シミュレーション','繰上げ返済や返済戦略の効果を試算'],
+    sim:['返済シミュレーション','各借入の完済予定日を確認'],
     calendar:['支払記録・期日','今月の支払実績と、今後の返済期日'],
     settings:['設定','借入の種別（カテゴリ）を管理']
   };
@@ -1076,7 +1076,7 @@ function debtCardHTML(d, withActions=true){
           <span class="debt-name">${escapeHTML(d.name)}</span>
           <span class="pill ${pillCls}">${pillText}</span>
         </div>
-        <div class="debt-lender">${escapeHTML(d.lender||'')} ${d.interestRate?` ・ 金利 ${d.interestRate}%`:' ・ 無利息'}</div>
+        <div class="debt-lender">${escapeHTML(d.lender||'')} ・ ${interestLabelForDebt(d)}</div>
       </div>
       <div class="debt-nums">
         <div class="numrow">
@@ -1291,10 +1291,23 @@ function openActualBreakdownModal(){
 }
 
 /* ---------- Simulation tab ---------- */
-let simSelectedId = null;
-let simExtra = 0;
-let simStrategy = 'avalanche';
-let simBudget = 0;
+function simCardHTML(d){
+  const proj = projectPayoff(d);
+  const payoff = proj.impossible ? null : addMonths(todayISO(), proj.months);
+  const tColor = typeColor(d.type);
+  return `
+  <div class="sim-card">
+    <div class="debt-name-wrap" style="margin-bottom:14px;">
+      <span class="type-badge" style="background:${hexToRgba(tColor,0.14)};color:${tColor};">${escapeHTML(typeLabel(d.type))}</span>
+      <span class="debt-name">${escapeHTML(d.name)}</span>
+    </div>
+    <div class="compare-row"><span>当初の残高 → 現在の残高</span><span class="v mono">${fmtYen(d.initialAmount)} → ${fmtYen(d.balance)}</span></div>
+    <div class="compare-row"><span>月々の返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned)}</span></div>
+    <div class="compare-row"><span>利息</span><span class="v mono">${interestLabelForDebt(d)}</span></div>
+    <div class="compare-row"><span>完済予定日</span><span class="v mono" style="color:var(--sage)">${payoff? fmtDate(payoff) : '—'}</span></div>
+    ${proj.impossible?`<div class="hint" style="color:var(--rust);margin-top:8px;">現在の返済額では利息が上回り完済しません。返済額を見直してください。</div>`:''}
+  </div>`;
+}
 
 function renderSim(){
   const root = document.getElementById('view-root');
@@ -1302,77 +1315,11 @@ function renderSim(){
     root.innerHTML = `<div class="empty">シミュレーションには借入データが必要です。「借入一覧」から登録してください。</div>`;
     return;
   }
-  if(!simSelectedId) simSelectedId = state.debts[0].id;
-  const d = state.debts.find(x=>x.id===simSelectedId);
-
-  const base = monthsToPayoff(d.balance, d.interestRate, d.monthlyPlanned);
-  const withExtra = monthsToPayoff(d.balance, d.interestRate, d.monthlyPlanned+simExtra);
-  const basePayoff = base.impossible? null : addMonths(todayISO(), base.months);
-  const extraPayoff = withExtra.impossible? null : addMonths(todayISO(), withExtra.months);
-  const monthsSaved = (!base.impossible && !withExtra.impossible) ? (base.months - withExtra.months) : 0;
-  const interestSaved = (!base.impossible && !withExtra.impossible) ? (base.totalInterest - withExtra.totalInterest) : 0;
-
-  const portfolioNoExtra = simulatePortfolio(0, simStrategy);
-  const portfolioWithExtra = simulatePortfolio(simBudget, simStrategy);
-  const maxMonths = Math.max(1, ...portfolioNoExtra.map(x=>x.paidMonth||0));
-
   root.innerHTML = `
-    <div class="sim-grid">
-      <div class="sim-card">
-        <h3>① 個別の繰上げ返済シミュレーション</h3>
-        <div class="field">
-          <label>対象の借入</label>
-          <select id="sim-debt-select">
-            ${state.debts.map(x=>`<option value="${x.id}" ${x.id===simSelectedId?'selected':''}>${escapeHTML(x.name)}（残高 ${fmtYen(x.balance)}）</option>`).join('')}
-          </select>
-        </div>
-        <div class="slider-row">
-          <span style="font-size:12.5px;color:var(--muted);width:110px;">毎月の追加返済</span>
-          <input type="range" id="sim-extra-range" min="0" max="100000" step="1000" value="${simExtra}">
-          <span class="slider-val mono">+${fmtYen(simExtra)}</span>
-        </div>
-        <div class="compare-row"><span>現状の月々返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned)}</span></div>
-        <div class="compare-row"><span>追加後の月々返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned+simExtra)}</span></div>
-        <div class="compare-row"><span>完済予定日（現状）</span><span class="v mono">${fmtDate(basePayoff)}</span></div>
-        <div class="compare-row"><span>完済予定日（追加後）</span><span class="v mono" style="color:var(--sage)">${fmtDate(extraPayoff)}</span></div>
-        <div class="compare-row"><span>短縮される期間</span><span class="v mono" style="color:var(--sage)">${monthsSaved>0? monthsSaved+' ヶ月早まる' : '—'}</span></div>
-        <div class="compare-row"><span>軽減される利息</span><span class="v mono" style="color:var(--sage)">${interestSaved>0? fmtYen(interestSaved):'¥0'}</span></div>
-        ${base.impossible?`<div class="hint" style="color:var(--rust);margin-top:8px;">現在の返済額では利息が上回り完済しません。返済額を見直してください。</div>`:''}
-      </div>
-
-      <div class="sim-card">
-        <h3>② 全体の返済戦略（複数借入がある場合）</h3>
-        <div class="strategy-toggle">
-          <button class="toggle-btn ${simStrategy==='avalanche'?'active':''}" data-strategy="avalanche">雪崩式（金利が高い順）</button>
-          <button class="toggle-btn ${simStrategy==='snowball'?'active':''}" data-strategy="snowball">雪だるま式（残高が少ない順）</button>
-        </div>
-        <div class="slider-row">
-          <span style="font-size:12.5px;color:var(--muted);width:110px;">追加できる総予算</span>
-          <input type="range" id="sim-budget-range" min="0" max="150000" step="5000" value="${simBudget}">
-          <span class="slider-val mono">+${fmtYen(simBudget)}/月</span>
-        </div>
-        <div style="margin-top:16px;">
-          ${portfolioWithExtra.sort((a,b)=>(a.paidMonth||999)-(b.paidMonth||999)).map(p=>{
-            const widthPct = Math.min(100,((p.paidMonth||maxMonths)/maxMonths)*100);
-            return `
-            <div class="gantt-row">
-              <div class="gantt-label">${escapeHTML(p.name)}</div>
-              <div class="gantt-track"><div class="gantt-bar" style="width:${widthPct}%"></div></div>
-              <div class="gantt-month">${p.paidMonth? p.paidMonth+'ヶ月後':'—'}</div>
-            </div>`;
-          }).join('')}
-        </div>
-        <div class="hint" style="margin-top:10px;">追加予算なしの場合の全体完済：${Math.max(...portfolioNoExtra.map(x=>x.paidMonth||0))} ヶ月後 → 追加あり：<b style="color:var(--sage)">${Math.max(...portfolioWithExtra.map(x=>x.paidMonth||0))} ヶ月後</b></div>
-      </div>
+    <div class="sim-grid" style="grid-template-columns:1fr 1fr;">
+      ${state.debts.map(d=>simCardHTML(d)).join('')}
     </div>
   `;
-
-  document.getElementById('sim-debt-select').addEventListener('change', e=>{ simSelectedId = e.target.value; renderSim(); });
-  document.getElementById('sim-extra-range').addEventListener('input', e=>{ simExtra = Number(e.target.value); renderSim(); });
-  document.getElementById('sim-budget-range').addEventListener('input', e=>{ simBudget = Number(e.target.value); renderSim(); });
-  document.querySelectorAll('[data-strategy]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ simStrategy = btn.dataset.strategy; renderSim(); });
-  });
 }
 
 /* ---------- Calendar / payments tab ---------- */
@@ -1511,13 +1458,25 @@ function renderSettings(){
 function openDebtModal(d=null){
   const isEdit = !!d;
   const root = document.getElementById('modal-root');
+  const interestType = isEdit ? (d.interestType || (d.interestRate ? 'rate' : 'none')) : 'rate';
+  const interestValue = interestType==='fixed' ? (d?.interestFixedAmount||0) : (d?.interestRate||0);
   root.innerHTML = `
     <div class="overlay" id="overlay">
       <div class="modal">
         <h3>${isEdit? '借入を編集':'借入を追加'}</h3>
-        <div class="field">
-          <label>名称</label>
-          <input id="f-name" value="${isEdit? escapeAttr(d.name):''}" placeholder="例：楽天カード">
+        <div class="row2" style="grid-template-columns:2fr 1fr;">
+          <div class="field">
+            <label>名称</label>
+            <input id="f-name" value="${isEdit? escapeAttr(d.name):''}" placeholder="例：楽天カード">
+          </div>
+          <div class="field">
+            <label>利息タイプ</label>
+            <select id="f-interest-type">
+              <option value="none" ${interestType==='none'?'selected':''}>無利息</option>
+              <option value="rate" ${interestType==='rate'?'selected':''}>金利</option>
+              <option value="fixed" ${interestType==='fixed'?'selected':''}>利息確定型</option>
+            </select>
+          </div>
         </div>
         <div class="row2">
           <div class="field">
@@ -1546,9 +1505,9 @@ function openDebtModal(d=null){
             <label>毎月の予定返済額</label>
             <input id="f-monthly" type="number" value="${isEdit? d.monthlyPlanned:''}" placeholder="30000">
           </div>
-          <div class="field">
-            <label>金利（年率 %・無ければ0）</label>
-            <input id="f-rate" type="number" step="0.1" value="${isEdit? d.interestRate:0}" placeholder="15.0">
+          <div class="field" id="interest-value-field">
+            <label id="f-interest-label">金利（年率 %）</label>
+            <input id="f-interest-value" type="number" step="0.1" value="${interestValue||''}" placeholder="15.0">
           </div>
         </div>
         <div class="row2">
@@ -1574,9 +1533,35 @@ function openDebtModal(d=null){
   `;
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
   document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+
+  function updateInterestFieldUI(type){
+    const wrap = document.getElementById('interest-value-field');
+    const label = document.getElementById('f-interest-label');
+    const input = document.getElementById('f-interest-value');
+    if(type==='none'){
+      wrap.style.display = 'none';
+    }else if(type==='fixed'){
+      wrap.style.display = '';
+      label.textContent = '利息金（円/月）';
+      input.placeholder = '10000';
+      input.step = '1';
+    }else{
+      wrap.style.display = '';
+      label.textContent = '金利（年率 %）';
+      input.placeholder = '15.0';
+      input.step = '0.1';
+    }
+  }
+  updateInterestFieldUI(interestType);
+  document.getElementById('f-interest-type').addEventListener('change', e=>{
+    updateInterestFieldUI(e.target.value);
+  });
+
   document.getElementById('btn-save').addEventListener('click', ()=>{
     const name = document.getElementById('f-name').value.trim();
     if(!name){ alert('名称を入力してください'); return; }
+    const iType = document.getElementById('f-interest-type').value;
+    const iValue = Number(document.getElementById('f-interest-value').value)||0;
     const payload = {
       name,
       type: document.getElementById('f-type').value,
@@ -1584,7 +1569,9 @@ function openDebtModal(d=null){
       initialAmount: Number(document.getElementById('f-initial').value)||0,
       balance: Number(document.getElementById('f-balance').value)||0,
       monthlyPlanned: Number(document.getElementById('f-monthly').value)||0,
-      interestRate: Number(document.getElementById('f-rate').value)||0,
+      interestType: iType,
+      interestRate: iType==='rate' ? iValue : 0,
+      interestFixedAmount: iType==='fixed' ? iValue : 0,
       dueDay: Math.min(28, Math.max(1, Number(document.getElementById('f-dueday').value)||27)),
       startDate: document.getElementById('f-start').value || todayISO(),
       notes: document.getElementById('f-notes').value.trim(),
@@ -1645,11 +1632,21 @@ function openPaymentModal(debt=null, month=null){
     if(actualAmount<=0){ alert('支払額を入力してください'); return; }
 
     const existing = state.payments.find(p=>p.debtId===debtId && p.month===month);
+    const d = state.debts.find(x=>x.id===debtId);
+
+    const principalPortion = (amount)=>{
+      if(d && d.interestType==='fixed') return Math.max(0, amount - (d.interestFixedAmount||0));
+      return amount;
+    };
+
+    if(d){
+      if(existing) d.balance += principalPortion(existing.actualAmount);
+      d.balance -= principalPortion(actualAmount);
+      d.balance = Math.max(0, d.balance);
+    }
+
     if(existing){ existing.actualAmount = actualAmount; existing.paidDate = paidDate; }
     else{ state.payments.push({id:uid(), debtId, month, paidDate, actualAmount}); }
-
-    const d = state.debts.find(x=>x.id===debtId);
-    if(d) d.balance = Math.max(0, d.balance - actualAmount);
 
     save(state);
     closeModal();
