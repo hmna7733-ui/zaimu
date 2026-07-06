@@ -232,6 +232,7 @@ main{padding:0 32px 60px 32px;}
 /* rail */
 .rail-wrap{margin-top:16px;}
 .rail-labels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-bottom:5px;}
+.rail-countdown{color:var(--rust);font-weight:700;font-size:14px;}
 .rail-track{
   position:relative;height:10px;background:#EDEAE2;border-radius:20px;overflow:visible;
 }
@@ -1068,6 +1069,21 @@ function renderDashboard(){
   bindBudgetActualClicks();
 }
 
+function remainingYearsMonths(dateStr){
+  if(!dateStr) return null;
+  const today = new Date();
+  const target = new Date(dateStr);
+  let months = (target.getFullYear()-today.getFullYear())*12 + (target.getMonth()-today.getMonth());
+  if(target.getDate() < today.getDate()) months -= 1;
+  if(months<=0) return 'まもなく完済';
+  const years = Math.floor(months/12);
+  const rem = months%12;
+  let str = 'あと';
+  if(years>0) str += years+'年';
+  if(rem>0 || years===0) str += rem+'ヶ月';
+  return str+'で完済';
+}
+
 function railHTML(d){
   const ratio = progressRatio(d);
   const status = statusOf(d);
@@ -1076,8 +1092,10 @@ function railHTML(d){
   const totalSpan = new Date(payoff||todayISO()) - new Date(d.startDate);
   const elapsed = new Date() - new Date(d.startDate);
   const todayPos = totalSpan>0 ? Math.min(96, Math.max(2,(elapsed/totalSpan)*100)) : 50;
+  const countdown = payoff ? remainingYearsMonths(payoff) : null;
   return `
     <div class="rail-wrap" data-rail-id="${d.id}" title="タップして編集">
+      ${countdown ? `<div style="text-align:right;"><span class="rail-countdown">${countdown}</span></div>` : ''}
       <div class="rail-labels">
         <span>開始 ${fmtDate(d.startDate)}</span>
         <span>完済予定 ${fmtDate(payoff)}</span>
