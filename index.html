@@ -1359,17 +1359,87 @@ function simCardHTML(d){
   </div>`;
 }
 
+let simViewMode = 'individual';
+
+function lenderGroups(){
+  const map = new Map();
+  state.debts.forEach(d=>{
+    const key = (d.lender||'').trim() || '貸主未設定';
+    if(!map.has(key)) map.set(key, []);
+    map.get(key).push(d);
+  });
+  return [...map.entries()].map(([lender, debts])=>({
+    lender,
+    debts,
+    totalBalance: debts.reduce((s,x)=>s+x.balance,0),
+    totalMonthly: debts.reduce((s,x)=>s+x.monthlyPlanned,0),
+  })).sort((a,b)=> b.totalBalance - a.totalBalance);
+}
+
+function lenderDebtRowHTML(d){
+  const tColor = typeColor(d.type);
+  return `
+  <div class="due-row">
+    <div class="due-info">
+      <div class="n"><span class="type-badge" style="background:${hexToRgba(tColor,0.14)};color:${tColor};margin-right:6px;">${escapeHTML(typeLabel(d.type))}</span>${escapeHTML(d.name)}</div>
+      <div class="s">月々 ${fmtYen(d.monthlyPlanned)} ・ ${interestLabelForDebt(d)}</div>
+    </div>
+    <div class="due-amt">
+      ${fmtYen(d.balance)}
+      <div style="margin-top:6px;"><button class="btn btn-ghost btn-sm" data-edit-id="${d.id}">編集</button></div>
+    </div>
+  </div>`;
+}
+
+function lenderCardHTML(group){
+  return `
+  <div class="sim-card">
+    <div class="debt-name-wrap" style="margin-bottom:14px;justify-content:space-between;">
+      <span class="debt-name">${escapeHTML(group.lender)}</span>
+      <span class="pill pill-sage">${group.debts.length}件</span>
+    </div>
+    <div class="compare-row"><span>合計残高</span><span class="v mono" style="font-size:18px;">${fmtYen(group.totalBalance)}</span></div>
+    <div class="compare-row"><span>月々の返済合計</span><span class="v mono">${fmtYen(group.totalMonthly)}</span></div>
+    <div class="due-list" style="margin-top:12px;">
+      ${group.debts.map(d=>lenderDebtRowHTML(d)).join('')}
+    </div>
+  </div>`;
+}
+
 function renderSim(){
   const root = document.getElementById('view-root');
   if(state.debts.length===0){
     root.innerHTML = `<div class="empty">シミュレーションには借入データが必要です。「借入一覧」から登録してください。</div>`;
     return;
   }
-  root.innerHTML = `
-    <div class="sim-grid" style="grid-template-columns:1fr;max-width:640px;">
-      ${state.debts.map(d=>simCardHTML(d)).join('')}
+
+  const toggleHTML = `
+    <div class="strategy-toggle" style="max-width:640px;">
+      <button class="toggle-btn ${simViewMode==='individual'?'active':''}" data-sim-view="individual">個別のシミュレーション</button>
+      <button class="toggle-btn ${simViewMode==='lender'?'active':''}" data-sim-view="lender">貸主別の合計</button>
     </div>
   `;
+
+  const bodyHTML = simViewMode==='lender'
+    ? lenderGroups().map(g=>lenderCardHTML(g)).join('')
+    : state.debts.map(d=>simCardHTML(d)).join('');
+
+  root.innerHTML = `
+    ${toggleHTML}
+    <div class="sim-grid" style="grid-template-columns:1fr;max-width:640px;">
+      ${bodyHTML}
+    </div>
+  `;
+
+  root.querySelectorAll('[data-sim-view]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ simViewMode = btn.dataset.simView; renderSim(); });
+  });
+  root.querySelectorAll('[data-edit-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const d = state.debts.find(x=>x.id===btn.dataset.editId);
+      if(d) openDebtModal(d);
+    });
+  });
 }
 
 /* ---------- Calendar / payments tab ---------- */
