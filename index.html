@@ -169,6 +169,10 @@ main{padding:0 32px 60px 32px;}
 .summary-card.hero .value{color:#fff;}
 .summary-card.hero .foot{color:#9AA6C0;}
 
+.clickable-card{cursor:pointer;transition:transform .12s ease, box-shadow .12s ease;}
+.clickable-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(30,42,69,0.16);}
+.clickable-card:active{transform:translateY(0);}
+
 .genre-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px;}
 .genre-card{background:var(--card);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);border-top:3px solid var(--line);}
 .genre-card.card{border-top-color:#3A4C8C;}
@@ -343,17 +347,35 @@ textarea#f-fbconfig{font-family:var(--mono);font-size:12px;min-height:120px;}
   .topbar{padding:20px 16px 0 16px;}
   main{padding:0 16px 90px 16px;}
   .summary-grid{grid-template-columns:1fr 1fr;}
+  .summary-card{padding:14px 14px;min-width:0;}
+  .summary-card .value{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .summary-card .label{font-size:10.5px;}
+  .summary-card .foot{font-size:10.5px;}
+  .summary-card.hero{grid-column:1 / -1;}
+  .summary-card.hero .value{font-size:24px;}
+  .genre-card{padding:13px 14px;}
+  .genre-card .gnum{font-size:17px;}
+  .ring-wrap{gap:8px;}
+  .ring-wrap svg{width:48px;height:48px;}
   .sim-grid{grid-template-columns:1fr;}
   .mobile-tabbar{
     display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--navy);
-    z-index:40;padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+    z-index:40;padding:6px 2px calc(6px + env(safe-area-inset-bottom));
   }
   .mobile-tabbar button{
-    flex:1;background:none;border:none;color:#9AA6C0;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;border-radius:8px;
+    flex:1;min-width:0;background:none;border:none;color:#9AA6C0;font-size:9.5px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 2px;border-radius:8px;line-height:1.2;white-space:nowrap;
   }
   .mobile-tabbar button.active{color:#fff;background:rgba(255,255,255,0.08);}
   .debt-nums{gap:16px;}
+  .debt-nums .numblock{min-width:0;}
   .row2{grid-template-columns:1fr;}
+  .debt-top{gap:10px;}
+  .debt-name{font-size:14.5px;}
+  .modal{padding:22px 18px;}
+}
+@media (max-width:380px){
+  .summary-grid{grid-template-columns:1fr;}
+  .summary-card.hero{grid-column:auto;}
 }
 </style>
 </head>
@@ -382,10 +404,10 @@ textarea#f-fbconfig{font-family:var(--mono);font-size:12px;min-height:120px;}
 const LS_KEY = 'repay_ledger_v1';
 
 const TABS = [
-  {id:'dashboard', label:'ダッシュボード', icon:'◆'},
-  {id:'debts',     label:'借入一覧',       icon:'◆'},
-  {id:'sim',       label:'返済シミュレーション', icon:'◆'},
-  {id:'calendar',  label:'支払記録・期日', icon:'◆'},
+  {id:'dashboard', label:'ダッシュボード', shortLabel:'ホーム'},
+  {id:'debts',     label:'借入一覧',       shortLabel:'借入'},
+  {id:'sim',       label:'返済シミュレーション', shortLabel:'試算'},
+  {id:'calendar',  label:'支払記録・期日', shortLabel:'記録'},
 ];
 
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -879,7 +901,7 @@ function renderNav(){
 
   const mnav = document.getElementById('mobile-nav');
   mnav.innerHTML = TABS.map(t=>`
-    <button class="${currentTab===t.id?'active':''}" data-tab="${t.id}">${t.label}</button>
+    <button class="${currentTab===t.id?'active':''}" data-tab="${t.id}">${t.shortLabel}</button>
   `).join('');
   mnav.querySelectorAll('button').forEach(btn=>{
     btn.addEventListener('click', ()=>{ currentTab = btn.dataset.tab; renderAll(); });
@@ -994,6 +1016,7 @@ function renderDashboard(){
     </div>
   `;
   bindDebtCardActions();
+  bindSummaryClicks();
 }
 
 function railHTML(d){
@@ -1094,10 +1117,11 @@ function renderDebts(){
     </div>
   `;
   bindDebtCardActions();
+  bindSummaryClicks();
 }
 
-function bindDebtCardActions(){
-  document.querySelectorAll('.debt-card').forEach(card=>{
+function bindDebtCardActions(root=document){
+  root.querySelectorAll('.debt-card').forEach(card=>{
     const id = card.dataset.id;
     const d = state.debts.find(x=>x.id===id);
     card.querySelectorAll('[data-action]').forEach(btn=>{
@@ -1110,12 +1134,47 @@ function bindDebtCardActions(){
             state.debts = state.debts.filter(x=>x.id!==id);
             state.payments = state.payments.filter(p=>p.debtId!==id);
             save(state);
+            closeModal();
             renderAll();
           }
         }
       });
     });
   });
+}
+
+function bindSummaryClicks(root=document){
+  const hero = root.querySelector('.summary-card.hero');
+  if(hero){
+    hero.classList.add('clickable-card');
+    hero.addEventListener('click', ()=>openDebtListModal(null, '借入一覧（すべて）'));
+  }
+  root.querySelectorAll('.genre-card').forEach(card=>{
+    card.classList.add('clickable-card');
+    const type = ['card','person','company'].find(t=>card.classList.contains(t));
+    card.addEventListener('click', ()=>openDebtListModal(type, typeLabel(type)+'の借入一覧'));
+  });
+}
+
+function openDebtListModal(filterType, title){
+  const list = filterType ? state.debts.filter(d=>d.type===filterType) : state.debts;
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="overlay" id="overlay">
+      <div class="modal" style="max-width:660px;">
+        <h3>${escapeHTML(title)}</h3>
+        <div class="debt-list">
+          ${list.map(d=>debtCardHTML(d, true)).join('') || `<div class="empty">該当する借入がありません。</div>`}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-close-list">閉じる</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-close-list').addEventListener('click', closeModal);
+  document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+  bindDebtCardActions(root);
 }
 
 /* ---------- Simulation tab ---------- */
