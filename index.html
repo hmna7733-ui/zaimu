@@ -1517,11 +1517,40 @@ function renderCalendar(){
             <div class="n">${d? escapeHTML(d.name) : '（削除済み）'}</div>
             <div class="s">${p.month}分の支払</div>
           </div>
-          <div class="due-amt">${fmtYen(p.actualAmount)}</div>
+          <div class="due-amt">
+            ${fmtYen(p.actualAmount)}
+            <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end;">
+              ${d? `<button class="btn btn-ghost btn-sm" data-edit-payment="${p.id}">編集</button>` : ''}
+              <button class="btn btn-ghost btn-sm" data-delete-payment="${p.id}" style="color:var(--rust);border-color:var(--rust-bg);">削除</button>
+            </div>
+          </div>
         </div>`;
       }).join('') || `<div class="empty">支払記録がまだありません。</div>`}
     </div>
   `;
+
+  root.querySelectorAll('[data-edit-payment]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = state.payments.find(x=>x.id===btn.dataset.editPayment);
+      const d = p && state.debts.find(x=>x.id===p.debtId);
+      if(d) openPaymentModal(d, p.month);
+    });
+  });
+  root.querySelectorAll('[data-delete-payment]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = state.payments.find(x=>x.id===btn.dataset.deletePayment);
+      if(!p) return;
+      if(!confirm('この支払記録を削除しますか？残高の計算も元に戻します。')) return;
+      const d = state.debts.find(x=>x.id===p.debtId);
+      if(d){
+        const portion = (d.interestType==='fixed') ? Math.max(0, p.actualAmount - (d.interestFixedAmount||0)) : p.actualAmount;
+        d.balance += portion;
+      }
+      state.payments = state.payments.filter(x=>x.id!==p.id);
+      save(state);
+      renderAll();
+    });
+  });
 }
 
 function typeRowHTML(ty){
