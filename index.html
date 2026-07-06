@@ -480,6 +480,8 @@ function ensureTypes(state){
       d.interestType = d.interestRate ? 'rate' : 'none';
     }
     if(d.interestFixedAmount===undefined) d.interestFixedAmount = 0;
+    if(!d.paymentType) d.paymentType = 'monthly';
+    if(d.finalDueDate===undefined) d.finalDueDate = null;
   });
   return state;
 }
@@ -860,9 +862,36 @@ function projectPayoff(d, extraMonthly=0){
   return monthsToPayoff(balance, d.interestRate||0, monthly);
 }
 function payoffDateForDebt(d, extra=0){
+  if((d.paymentType||'monthly')==='deadline' && d.finalDueDate){
+    return d.finalDueDate;
+  }
   const r = projectPayoff(d, extra);
   if(r.impossible) return null;
   return addMonths(todayISO(), r.months);
+}
+function monthsBetweenDates(fromStr, toStr){
+  const from = new Date(fromStr), to = new Date(toStr);
+  let months = (to.getFullYear()-from.getFullYear())*12 + (to.getMonth()-from.getMonth());
+  if(to.getDate() < from.getDate()) months -= 1;
+  return Math.max(1, months);
+}
+function requiredMonthlyAmount(d){
+  if(!d.finalDueDate) return null;
+  const n = monthsBetweenDates(todayISO(), d.finalDueDate);
+  const balance = d.balance;
+  if(balance<=0) return 0;
+  const type = d.interestType || 'none';
+  if(type==='fixed'){
+    return balance/n + (d.interestFixedAmount||0);
+  }
+  if(type==='rate' && d.interestRate>0){
+    const r = d.interestRate/100/12;
+    if(r<=0) return balance/n;
+    const pow = Math.pow(1+r, -n);
+    if(pow>=1) return balance/n;
+    return balance * r / (1 - pow);
+  }
+  return balance/n;
 }
 function overallPayoffDate(){
   let latest = null;
@@ -1292,20 +1321,41 @@ function openActualBreakdownModal(){
 
 /* ---------- Simulation tab ---------- */
 function simCardHTML(d){
-  const proj = projectPayoff(d);
-  const payoff = proj.impossible ? null : addMonths(todayISO(), proj.months);
   const tColor = typeColor(d.type);
-  return `
-  <div class="sim-card">
-    <div class="debt-name-wrap" style="margin-bottom:14px;">
-      <span class="type-badge" style="background:${hexToRgba(tColor,0.14)};color:${tColor};">${escapeHTML(typeLabel(d.type))}</span>
-      <span class="debt-name">${escapeHTML(d.name)}</span>
-    </div>
+  const isDeadline = (d.paymentType||'monthly')==='deadline';
+
+  let bodyHTML = '';
+  if(isDeadline){
+    const required = d.finalDueDate ? requiredMonthlyAmount(d) : null;
+    const diff = required!==null ? required - d.monthlyPlanned : null;
+    bodyHTML = `
+    <div class="compare-row"><span>当初の残高 → 現在の残高</span><span class="v mono">${fmtYen(d.initialAmount)} → ${fmtYen(d.balance)}</span></div>
+    <div class="compare-row"><span>利息</span><span class="v mono">${interestLabelForDebt(d)}</span></div>
+    <div class="compare-row"><span>最終期日</span><span class="v mono" style="color:var(--sage)">${d.finalDueDate? fmtDate(d.finalDueDate) : '未設定'}</span></div>
+    <div class="compare-row"><span>現在の月々返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned)}</span></div>
+    <div class="compare-row"><span>逆算した必要月額</span><span class="v mono" style="font-size:17px;color:${diff!==null && diff>0.5 ? 'var(--rust)' : 'var(--sage)'};">${required!==null? fmtYen(required) : '最終期日を設定してください'}</span></div>
+    ${diff!==null && diff>0.5 ? `<div class="hint" style="color:var(--rust);margin-top:6px;">現在の設定額では期日までに完済できません。あと${fmtYen(diff)}／月 上乗せが必要です。</div>` : ''}
+    `;
+  }else{
+    const proj = projectPayoff(d);
+    const payoff = proj.impossible ? null : addMonths(todayISO(), proj.months);
+    bodyHTML = `
     <div class="compare-row"><span>当初の残高 → 現在の残高</span><span class="v mono">${fmtYen(d.initialAmount)} → ${fmtYen(d.balance)}</span></div>
     <div class="compare-row"><span>月々の返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned)}</span></div>
     <div class="compare-row"><span>利息</span><span class="v mono">${interestLabelForDebt(d)}</span></div>
     <div class="compare-row"><span>完済予定日</span><span class="v mono" style="color:var(--sage)">${payoff? fmtDate(payoff) : '—'}</span></div>
     ${proj.impossible?`<div class="hint" style="color:var(--rust);margin-top:8px;">現在の返済額では利息が上回り完済しません。返済額を見直してください。</div>`:''}
+    `;
+  }
+
+  return `
+  <div class="sim-card">
+    <div class="debt-name-wrap" style="margin-bottom:14px;">
+      <span class="type-badge" style="background:${hexToRgba(tColor,0.14)};color:${tColor};">${escapeHTML(typeLabel(d.type))}</span>
+      <span class="debt-name">${escapeHTML(d.name)}</span>
+      <span class="pill ${isDeadline?'pill-amber':'pill-sage'}">${isDeadline?'期限型':'毎月タイプ'}</span>
+    </div>
+    ${bodyHTML}
   </div>`;
 }
 
@@ -1316,7 +1366,7 @@ function renderSim(){
     return;
   }
   root.innerHTML = `
-    <div class="sim-grid" style="grid-template-columns:1fr 1fr;">
+    <div class="sim-grid" style="grid-template-columns:1fr;max-width:640px;">
       ${state.debts.map(d=>simCardHTML(d)).join('')}
     </div>
   `;
@@ -1460,6 +1510,7 @@ function openDebtModal(d=null){
   const root = document.getElementById('modal-root');
   const interestType = isEdit ? (d.interestType || (d.interestRate ? 'rate' : 'none')) : 'rate';
   const interestValue = interestType==='fixed' ? (d?.interestFixedAmount||0) : (d?.interestRate||0);
+  const paymentType = isEdit ? (d.paymentType || 'monthly') : 'monthly';
   root.innerHTML = `
     <div class="overlay" id="overlay">
       <div class="modal">
@@ -1488,6 +1539,19 @@ function openDebtModal(d=null){
           <div class="field">
             <label>貸主 / 発行会社名</label>
             <input id="f-lender" value="${isEdit? escapeAttr(d.lender||''):''}" placeholder="例：〇〇銀行">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>支払いタイプ</label>
+            <select id="f-payment-type">
+              <option value="monthly" ${paymentType==='monthly'?'selected':''}>毎月タイプ</option>
+              <option value="deadline" ${paymentType==='deadline'?'selected':''}>期限型</option>
+            </select>
+          </div>
+          <div class="field" id="final-due-field">
+            <label>最終期日</label>
+            <input id="f-final-due" type="date" value="${isEdit && d.finalDueDate ? d.finalDueDate : ''}">
           </div>
         </div>
         <div class="row2">
@@ -1557,11 +1621,22 @@ function openDebtModal(d=null){
     updateInterestFieldUI(e.target.value);
   });
 
+  function updatePaymentTypeUI(type){
+    const wrap = document.getElementById('final-due-field');
+    wrap.style.display = type==='deadline' ? '' : 'none';
+  }
+  updatePaymentTypeUI(paymentType);
+  document.getElementById('f-payment-type').addEventListener('change', e=>{
+    updatePaymentTypeUI(e.target.value);
+  });
+
   document.getElementById('btn-save').addEventListener('click', ()=>{
     const name = document.getElementById('f-name').value.trim();
     if(!name){ alert('名称を入力してください'); return; }
     const iType = document.getElementById('f-interest-type').value;
     const iValue = Number(document.getElementById('f-interest-value').value)||0;
+    const pType = document.getElementById('f-payment-type').value;
+    const finalDue = document.getElementById('f-final-due').value || null;
     const payload = {
       name,
       type: document.getElementById('f-type').value,
@@ -1572,6 +1647,8 @@ function openDebtModal(d=null){
       interestType: iType,
       interestRate: iType==='rate' ? iValue : 0,
       interestFixedAmount: iType==='fixed' ? iValue : 0,
+      paymentType: pType,
+      finalDueDate: pType==='deadline' ? finalDue : null,
       dueDay: Math.min(28, Math.max(1, Number(document.getElementById('f-dueday').value)||27)),
       startDate: document.getElementById('f-start').value || todayISO(),
       notes: document.getElementById('f-notes').value.trim(),
