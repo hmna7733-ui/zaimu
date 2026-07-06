@@ -146,7 +146,7 @@ input,select,textarea{font-family:inherit;}
 }
 .fab:hover{background:#15203A;}
 @media (max-width:880px){
-  .fab{right:18px;bottom:calc(78px + env(safe-area-inset-bottom));padding:13px 18px;}
+  .fab{right:18px;bottom:calc(88px + env(safe-area-inset-bottom));padding:13px 18px;}
 }
 
 main{padding:0 32px 60px 32px;}
@@ -181,9 +181,6 @@ main{padding:0 32px 60px 32px;}
 
 .genre-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px;}
 .genre-card{background:var(--card);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);border-top:3px solid var(--line);}
-.genre-card.card{border-top-color:#3A4C8C;}
-.genre-card.person{border-top-color:var(--amber);}
-.genre-card.company{border-top-color:#6B4C9A;}
 .genre-card .ghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
 .genre-card .gname{font-size:13px;font-weight:700;color:var(--navy);}
 .genre-card .gcount{font-size:11px;color:var(--muted);}
@@ -223,12 +220,14 @@ main{padding:0 32px 60px 32px;}
 .type-company{background:#E7E2F0;color:#6B4C9A;}
 .debt-name{font-weight:700;font-size:15.5px;color:var(--navy);}
 .debt-lender{font-size:12px;color:var(--muted);margin-top:2px;}
-.debt-nums{display:flex;gap:26px;flex-wrap:wrap;}
+.debt-nums{display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+.numrow{display:flex;gap:26px;}
 .numblock{text-align:right;}
 .numblock .k{font-size:10.5px;color:var(--muted);}
-.numblock .v{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--navy);}
+.numblock .v{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--navy);}
 .numblock .v.rust{color:var(--rust);}
 .numblock .v.sage{color:var(--sage);}
+.numblock.big .v{font-size:20px;}
 
 /* rail */
 .rail-wrap{margin-top:16px;}
@@ -243,13 +242,10 @@ main{padding:0 32px 60px 32px;}
 .rail-fill.warn{background:linear-gradient(90deg,#DBA45C,var(--amber));}
 .rail-fill.danger{background:linear-gradient(90deg,#C96A50,var(--rust));}
 .rail-today{
-  position:absolute;top:-5px;width:2px;height:20px;background:var(--navy);
+  position:absolute;top:-3px;width:2px;height:16px;background:var(--navy);border-radius:2px;
 }
-.rail-today::after{
-  content:'今日';
-  position:absolute;top:-16px;left:50%;transform:translateX(-50%);
-  font-size:9.5px;color:var(--navy);font-weight:700;white-space:nowrap;
-}
+.rail-wrap{cursor:pointer;border-radius:10px;transition:background .12s ease;}
+.rail-wrap:hover{background:rgba(30,42,69,0.04);}
 .debt-actions{display:flex;gap:8px;margin-top:14px;}
 
 /* ---------- Forms / Modal ---------- */
@@ -351,7 +347,7 @@ textarea#f-fbconfig{font-family:var(--mono);font-size:12px;min-height:120px;}
   #app{grid-template-columns:1fr;}
   .sidebar{display:none;}
   .topbar{padding:20px 16px 0 16px;}
-  main{padding:0 16px 90px 16px;}
+  main{padding:0 16px 104px 16px;}
   .summary-grid{grid-template-columns:1fr 1fr;}
   .summary-card{padding:14px 14px;min-width:0;}
   .summary-card .value{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -366,13 +362,14 @@ textarea#f-fbconfig{font-family:var(--mono);font-size:12px;min-height:120px;}
   .sim-grid{grid-template-columns:1fr;}
   .mobile-tabbar{
     display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--navy);
-    z-index:40;padding:6px 2px calc(6px + env(safe-area-inset-bottom));
+    z-index:40;padding:4px 2px calc(4px + env(safe-area-inset-bottom));
   }
   .mobile-tabbar button{
-    flex:1;min-width:0;background:none;border:none;color:#9AA6C0;font-size:9.5px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 2px;border-radius:8px;line-height:1.2;white-space:nowrap;
+    flex:1;min-width:0;background:none;border:none;color:#9AA6C0;font-size:11.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 2px;border-radius:10px;line-height:1.2;white-space:nowrap;min-height:52px;
   }
   .mobile-tabbar button.active{color:#fff;background:rgba(255,255,255,0.08);}
-  .debt-nums{gap:16px;}
+  .numrow{gap:16px;}
+  .debt-nums{align-items:flex-end;}
   .debt-nums .numblock{min-width:0;}
   .row2{grid-template-columns:1fr;}
   .debt-top{gap:10px;}
@@ -414,6 +411,7 @@ const TABS = [
   {id:'debts',     label:'借入一覧',       shortLabel:'借入'},
   {id:'sim',       label:'返済シミュレーション', shortLabel:'試算'},
   {id:'calendar',  label:'支払記録・期日', shortLabel:'記録'},
+  {id:'settings',  label:'設定',           shortLabel:'設定'},
 ];
 
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -458,14 +456,32 @@ function seedData(){
         startDate: start.toISOString().slice(0,10), notes:''
       }
     ],
-    payments:[]
+    payments:[],
+    types:[
+      {id:'card', label:'カード', color:'#3A4C8C'},
+      {id:'person', label:'個人', color:'#C98A3B'},
+      {id:'company', label:'法人', color:'#6B4C9A'},
+    ]
   };
+}
+
+const TYPE_PALETTE = ['#3A4C8C','#C98A3B','#6B4C9A','#3E7C6F','#B4472F','#2A7A8C','#8C5A2A','#5C6784'];
+
+function ensureTypes(state){
+  if(!state.types || !state.types.length){
+    state.types = [
+      {id:'card', label:'カード', color:'#3A4C8C'},
+      {id:'person', label:'個人', color:'#C98A3B'},
+      {id:'company', label:'法人', color:'#6B4C9A'},
+    ];
+  }
+  return state;
 }
 
 function load(){
   try{
     const raw = localStorage.getItem(LS_KEY);
-    if(raw) return JSON.parse(raw);
+    if(raw) return ensureTypes(JSON.parse(raw));
   }catch(e){}
   const seed = seedData();
   localStorage.setItem(LS_KEY, JSON.stringify(seed));
@@ -534,11 +550,11 @@ function handleAuthChange(user){
     userDocRef().get().then(doc=>{
       if(doc.exists){
         const data = doc.data();
-        state = { debts: data.debts||[], payments: data.payments||[] };
+        state = ensureTypes({ debts: data.debts||[], payments: data.payments||[], types: data.types||null });
         saveLocal(state);
       }else{
         return userDocRef().set({
-          debts: state.debts||[], payments: state.payments||[],
+          debts: state.debts||[], payments: state.payments||[], types: state.types||[],
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       }
@@ -572,7 +588,7 @@ function queueCloudPush(){
   clearTimeout(cloudPushTimer);
   cloudPushTimer = setTimeout(()=>{
     userDocRef().set({
-      debts: state.debts, payments: state.payments,
+      debts: state.debts, payments: state.payments, types: state.types||[],
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(()=>{
       syncState = 'synced';
@@ -593,7 +609,7 @@ function manualPullFromCloud(){
   userDocRef().get().then(doc=>{
     if(doc.exists){
       const data = doc.data();
-      state = { debts: data.debts||[], payments: data.payments||[] };
+      state = ensureTypes({ debts: data.debts||[], payments: data.payments||[], types: data.types||null });
       saveLocal(state);
     }
     syncState = 'synced';
@@ -845,14 +861,29 @@ function statusOf(d){
   if(diffDays<=10) return 'warn';
   return 'ok';
 }
-function typeLabel(t){ return {card:'カード', person:'個人', company:'法人'}[t] || t; }
+function typeLabel(t){
+  const found = (state.types||[]).find(x=>x.id===t);
+  return found ? found.label : t;
+}
+function typeColor(t){
+  const found = (state.types||[]).find(x=>x.id===t);
+  if(found && found.color) return found.color;
+  const idx = (state.types||[]).findIndex(x=>x.id===t);
+  return TYPE_PALETTE[idx>=0 ? idx % TYPE_PALETTE.length : 0];
+}
+function hexToRgba(hex, alpha){
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 function genreTotals(){
-  const types = ['card','person','company'];
-  return types.map(t=>{
-    const list = state.debts.filter(d=>d.type===t);
+  return (state.types||[]).map(ty=>{
+    const list = state.debts.filter(d=>d.type===ty.id);
     return {
-      type: t,
+      type: ty.id,
+      label: ty.label,
+      color: ty.color || typeColor(ty.id),
       count: list.length,
       balance: list.reduce((s,d)=>s+d.balance,0),
       planned: list.reduce((s,d)=>s+d.monthlyPlanned,0),
@@ -919,7 +950,8 @@ function renderTopbar(){
     dashboard:['ダッシュボード','借入全体の状況をひと目で確認'],
     debts:['借入一覧','カード・個人・法人からの借入をまとめて管理'],
     sim:['返済シミュレーション','繰上げ返済や返済戦略の効果を試算'],
-    calendar:['支払記録・期日','今月の支払実績と、今後の返済期日']
+    calendar:['支払記録・期日','今月の支払実績と、今後の返済期日'],
+    settings:['設定','借入の種別（カテゴリ）を管理']
   };
   const [title, sub] = titles[currentTab];
   const topbar = document.getElementById('topbar');
@@ -969,7 +1001,6 @@ function renderDashboard(){
   const tPlanned = totalMonthlyPlanned();
   const tActual = actualThisMonth();
   const payoff = overallPayoffDate();
-  const budgetRatio = tPlanned>0 ? Math.min(1, tActual/tPlanned) : 0;
   const diff = tActual - tPlanned;
 
   const sortedByDue = [...state.debts].sort((a,b)=> new Date(nextDueDate(a)) - new Date(nextDueDate(b)));
@@ -982,36 +1013,19 @@ function renderDashboard(){
         <div class="value">${fmtYen(tBal)}</div>
         <div class="foot">${state.debts.length}件の借入 ・ 完済見込み ${fmtDate(payoff)}</div>
       </div>
-      <div class="summary-card">
+      <div class="summary-card" data-role="budget">
         <div class="label">今月の予算</div>
         <div class="value">${fmtYen(tPlanned)}</div>
-        <div class="foot">毎月の約定返済合計</div>
+        <div class="foot">毎月の約定返済合計（タップで内訳）</div>
       </div>
-      <div class="summary-card">
+      <div class="summary-card" data-role="actual">
         <div class="label">今月の実績</div>
         <div class="value">${fmtYen(tActual)}</div>
         <div class="foot">${diff>=0 ? `<span class="pill pill-sage">予算内 +${fmtYen(Math.abs(diff))}</span>` : `<span class="pill pill-rust">未達 -${fmtYen(Math.abs(diff))}</span>`}</div>
       </div>
-      <div class="summary-card">
-        <div class="ring-wrap">
-          ${ringSVG(budgetRatio, 64, 7, 'var(--sage)')}
-          <div>
-            <div class="label">予算消化率</div>
-            <div class="value" style="font-size:20px;">${Math.round(budgetRatio*100)}<small>%</small></div>
-          </div>
-        </div>
-      </div>
     </div>
 
     ${genreCardsHTML()}
-
-    <div class="section-head">
-      <h2>返済レール（全体）</h2>
-      <div class="hint">開始日から完済予定日までの進捗</div>
-    </div>
-    <div class="debt-list">
-      ${state.debts.map(d=>debtCardHTML(d, false)).join('') || `<div class="empty">借入がまだ登録されていません。</div>`}
-    </div>
 
     <div class="section-head">
       <h2>直近の返済期日</h2>
@@ -1021,8 +1035,8 @@ function renderDashboard(){
       ${nextUp.map(d=>dueRowHTML(d)).join('') || `<div class="empty">予定はありません。</div>`}
     </div>
   `;
-  bindDebtCardActions();
   bindSummaryClicks();
+  bindBudgetActualClicks();
 }
 
 function railHTML(d){
@@ -1034,7 +1048,7 @@ function railHTML(d){
   const elapsed = new Date() - new Date(d.startDate);
   const todayPos = totalSpan>0 ? Math.min(96, Math.max(2,(elapsed/totalSpan)*100)) : 50;
   return `
-    <div class="rail-wrap">
+    <div class="rail-wrap" data-rail-id="${d.id}" title="タップして編集">
       <div class="rail-labels">
         <span>開始 ${fmtDate(d.startDate)}</span>
         <span>完済予定 ${fmtDate(payoff)}</span>
@@ -1052,23 +1066,27 @@ function debtCardHTML(d, withActions=true){
   const status = statusOf(d);
   const pillCls = status==='danger'?'pill-rust':status==='warn'?'pill-amber':'pill-sage';
   const pillText = status==='danger'?'期日間近':status==='warn'?'まもなく期日':'順調';
-  const typeCls = 'type-'+d.type;
+  const tColor = typeColor(d.type);
   return `
   <div class="debt-card" data-id="${d.id}">
     <div class="debt-top">
       <div>
         <div class="debt-name-wrap">
-          <span class="type-badge ${typeCls}">${typeLabel(d.type)}</span>
+          <span class="type-badge" style="background:${hexToRgba(tColor,0.14)};color:${tColor};">${escapeHTML(typeLabel(d.type))}</span>
           <span class="debt-name">${escapeHTML(d.name)}</span>
           <span class="pill ${pillCls}">${pillText}</span>
         </div>
         <div class="debt-lender">${escapeHTML(d.lender||'')} ${d.interestRate?` ・ 金利 ${d.interestRate}%`:' ・ 無利息'}</div>
       </div>
       <div class="debt-nums">
-        <div class="numblock"><div class="k">残高</div><div class="v mono">${fmtYen(d.balance)}</div></div>
-        <div class="numblock"><div class="k">月々予定</div><div class="v mono">${fmtYen(d.monthlyPlanned)}</div></div>
-        <div class="numblock"><div class="k">次回期日</div><div class="v mono">${fmtDate(nextDueDate(d))}</div></div>
-        <div class="numblock"><div class="k">進捗</div><div class="v mono sage">${Math.round(ratio*100)}%</div></div>
+        <div class="numrow">
+          <div class="numblock big"><div class="k">残高</div><div class="v mono">${fmtYen(d.balance)}</div></div>
+          <div class="numblock"><div class="k">次回期日</div><div class="v mono">${fmtDate(nextDueDate(d))}</div></div>
+        </div>
+        <div class="numrow">
+          <div class="numblock"><div class="k">月々予定</div><div class="v mono">${fmtYen(d.monthlyPlanned)}</div></div>
+          <div class="numblock big"><div class="k">進捗</div><div class="v mono sage">${Math.round(ratio*100)}%</div></div>
+        </div>
       </div>
     </div>
     ${railHTML(d)}
@@ -1096,13 +1114,12 @@ function dueRowHTML(d){
 
 function genreCardsHTML(){
   const totals = genreTotals();
-  const icon = {card:'card', person:'person', company:'company'};
   return `
     <div class="genre-grid">
       ${totals.map(t=>`
-        <div class="genre-card ${icon[t.type]}">
+        <div class="genre-card" data-type="${t.type}" style="border-top-color:${t.color};">
           <div class="ghead">
-            <span class="gname">${typeLabel(t.type)}</span>
+            <span class="gname">${escapeHTML(t.label)}</span>
             <span class="gcount">${t.count}件</span>
           </div>
           <div class="gnum">${fmtYen(t.balance)}</div>
@@ -1117,13 +1134,11 @@ function genreCardsHTML(){
 function renderDebts(){
   const root = document.getElementById('view-root');
   root.innerHTML = `
-    ${genreCardsHTML()}
     <div class="debt-list">
       ${state.debts.map(d=>debtCardHTML(d, true)).join('') || `<div class="empty">まだ借入がありません。右上の「＋ 借入を追加」から登録してください。</div>`}
     </div>
   `;
   bindDebtCardActions();
-  bindSummaryClicks();
 }
 
 function bindDebtCardActions(root=document){
@@ -1147,6 +1162,12 @@ function bindDebtCardActions(root=document){
       });
     });
   });
+  root.querySelectorAll('.rail-wrap[data-rail-id]').forEach(rail=>{
+    rail.addEventListener('click', ()=>{
+      const d = state.debts.find(x=>x.id===rail.dataset.railId);
+      if(d) openDebtModal(d);
+    });
+  });
 }
 
 function bindSummaryClicks(root=document){
@@ -1157,7 +1178,7 @@ function bindSummaryClicks(root=document){
   }
   root.querySelectorAll('.genre-card').forEach(card=>{
     card.classList.add('clickable-card');
-    const type = ['card','person','company'].find(t=>card.classList.contains(t));
+    const type = card.dataset.type;
     card.addEventListener('click', ()=>openDebtListModal(type, typeLabel(type)+'の借入一覧'));
   });
 }
@@ -1181,6 +1202,92 @@ function openDebtListModal(filterType, title){
   document.getElementById('btn-close-list').addEventListener('click', closeModal);
   document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
   bindDebtCardActions(root);
+}
+
+function bindBudgetActualClicks(root=document){
+  const budgetCard = root.querySelector('.summary-card[data-role="budget"]');
+  if(budgetCard){
+    budgetCard.classList.add('clickable-card');
+    budgetCard.addEventListener('click', openBudgetBreakdownModal);
+  }
+  const actualCard = root.querySelector('.summary-card[data-role="actual"]');
+  if(actualCard){
+    actualCard.classList.add('clickable-card');
+    actualCard.addEventListener('click', openActualBreakdownModal);
+  }
+}
+
+function breakdownRowHTML(d, rightHTML){
+  const tColor = typeColor(d.type);
+  return `
+  <div class="due-row" data-id="${d.id}">
+    <div class="due-info">
+      <div class="n"><span class="type-badge" style="background:${hexToRgba(tColor,0.14)};color:${tColor};margin-right:6px;">${escapeHTML(typeLabel(d.type))}</span>${escapeHTML(d.name)}</div>
+      <div class="s">${escapeHTML(d.lender||'')}</div>
+    </div>
+    <div class="due-amt">${rightHTML}</div>
+  </div>`;
+}
+
+function openBudgetBreakdownModal(){
+  const root = document.getElementById('modal-root');
+  const rows = state.debts.map(d=>breakdownRowHTML(d, `
+    ${fmtYen(d.monthlyPlanned)}
+    <div style="margin-top:6px;"><button class="btn btn-ghost btn-sm" data-edit-id="${d.id}">編集</button></div>
+  `)).join('') || `<div class="empty">借入がありません。</div>`;
+  root.innerHTML = `
+    <div class="overlay" id="overlay">
+      <div class="modal" style="max-width:560px;">
+        <h3>今月の予算の内訳</h3>
+        <div class="due-list">${rows}</div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-close-list">閉じる</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-close-list').addEventListener('click', closeModal);
+  document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+  root.querySelectorAll('[data-edit-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const d = state.debts.find(x=>x.id===btn.dataset.editId);
+      if(d) openDebtModal(d);
+    });
+  });
+}
+
+function openActualBreakdownModal(){
+  const root = document.getElementById('modal-root');
+  const mk = monthKey();
+  const rows = state.debts.map(d=>{
+    const p = state.payments.find(x=>x.debtId===d.id && x.month===mk);
+    const amtHTML = p
+      ? `${fmtYen(p.actualAmount)}<div style="font-size:11px;font-weight:400;color:${p.actualAmount>=d.monthlyPlanned?'var(--sage)':'var(--rust)'};margin-top:2px;">${p.actualAmount>=d.monthlyPlanned?'予算内':'予算未達 '+fmtYen(d.monthlyPlanned-p.actualAmount)}</div>`
+      : `<span style="color:var(--muted);font-weight:400;">未記録</span>`;
+    return breakdownRowHTML(d, `
+      ${amtHTML}
+      <div style="margin-top:6px;"><button class="btn btn-ghost btn-sm" data-record-id="${d.id}">${p?'編集':'記録する'}</button></div>
+    `);
+  }).join('') || `<div class="empty">借入がありません。</div>`;
+  root.innerHTML = `
+    <div class="overlay" id="overlay">
+      <div class="modal" style="max-width:560px;">
+        <h3>今月の実績の内訳（${mk}）</h3>
+        <div class="due-list">${rows}</div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-close-list">閉じる</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-close-list').addEventListener('click', closeModal);
+  document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+  root.querySelectorAll('[data-record-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const d = state.debts.find(x=>x.id===btn.dataset.recordId);
+      if(d) openPaymentModal(d, mk);
+    });
+  });
 }
 
 /* ---------- Simulation tab ---------- */
@@ -1320,6 +1427,84 @@ function renderCalendar(){
   `;
 }
 
+function typeRowHTML(ty){
+  const count = state.debts.filter(d=>d.type===ty.id).length;
+  return `
+  <div class="due-row" data-type-id="${ty.id}">
+    <div style="width:30px;height:30px;border-radius:9px;background:${ty.color};flex-shrink:0;"></div>
+    <div class="due-info" style="flex:1;">
+      <input class="type-label-input" data-type-id="${ty.id}" value="${escapeAttr(ty.label)}"
+        style="border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:14px;font-weight:700;color:var(--navy);width:100%;max-width:240px;background:#FBFAF7;">
+      <div class="s" style="margin-top:5px;">${count}件の借入で使用中</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button class="btn btn-ghost btn-sm" data-save-type="${ty.id}">保存</button>
+      <button class="btn btn-ghost btn-sm" data-delete-type="${ty.id}" style="color:var(--rust);border-color:var(--rust-bg);">削除</button>
+    </div>
+  </div>`;
+}
+
+function renderSettings(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `
+    <div class="section-head"><h2>借入の種別（カテゴリ）</h2><div class="hint">名称の変更・追加ができます</div></div>
+    <div class="due-list">
+      ${state.types.map(ty=>typeRowHTML(ty)).join('') || `<div class="empty">種別がありません。</div>`}
+    </div>
+
+    <div class="sim-card" style="margin-top:22px;max-width:520px;">
+      <h3>種別を追加</h3>
+      <div class="row2">
+        <div class="field"><label>名称</label><input id="new-type-label" placeholder="例：家族"></div>
+        <div class="field"><label>カラー</label><input id="new-type-color" type="color" value="#3E7C6F" style="height:42px;padding:4px;cursor:pointer;"></div>
+      </div>
+      <button class="btn btn-primary" id="btn-add-type">＋ 追加する</button>
+    </div>
+  `;
+
+  root.querySelectorAll('[data-save-type]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.saveType;
+      const input = root.querySelector(`.type-label-input[data-type-id="${id}"]`);
+      const val = input.value.trim();
+      if(!val){ alert('名称を入力してください'); return; }
+      const ty = state.types.find(x=>x.id===id);
+      ty.label = val;
+      save(state);
+      renderAll();
+    });
+  });
+
+  root.querySelectorAll('[data-delete-type]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.deleteType;
+      const count = state.debts.filter(d=>d.type===id).length;
+      if(count>0){
+        alert(`このカテゴリは${count}件の借入で使われているため削除できません。先に該当の借入の種別を変更してください。`);
+        return;
+      }
+      if(state.types.length<=1){
+        alert('種別は最低1つ必要です。');
+        return;
+      }
+      if(confirm('この種別を削除しますか？')){
+        state.types = state.types.filter(x=>x.id!==id);
+        save(state);
+        renderAll();
+      }
+    });
+  });
+
+  document.getElementById('btn-add-type').addEventListener('click', ()=>{
+    const label = document.getElementById('new-type-label').value.trim();
+    const color = document.getElementById('new-type-color').value || TYPE_PALETTE[state.types.length % TYPE_PALETTE.length];
+    if(!label){ alert('名称を入力してください'); return; }
+    state.types.push({id: uid(), label, color});
+    save(state);
+    renderAll();
+  });
+}
+
 /* =========================================================
    Modals
 ========================================================= */
@@ -1338,9 +1523,7 @@ function openDebtModal(d=null){
           <div class="field">
             <label>種別</label>
             <select id="f-type">
-              <option value="card" ${d?.type==='card'?'selected':''}>カード</option>
-              <option value="person" ${d?.type==='person'?'selected':''}>個人</option>
-              <option value="company" ${d?.type==='company'?'selected':''}>法人</option>
+              ${state.types.map(ty=>`<option value="${ty.id}" ${d?.type===ty.id?'selected':''}>${escapeHTML(ty.label)}</option>`).join('')}
             </select>
           </div>
           <div class="field">
@@ -1417,9 +1600,10 @@ function openDebtModal(d=null){
   });
 }
 
-function openPaymentModal(debt=null){
+function openPaymentModal(debt=null, month=null){
   const root = document.getElementById('modal-root');
-  const mk = monthKey();
+  const mk = month || monthKey();
+  const existing = debt ? state.payments.find(p=>p.debtId===debt.id && p.month===mk) : null;
   root.innerHTML = `
     <div class="overlay" id="overlay">
       <div class="modal">
@@ -1437,12 +1621,12 @@ function openPaymentModal(debt=null){
           </div>
           <div class="field">
             <label>支払日</label>
-            <input id="p-date" type="date" value="${todayISO()}">
+            <input id="p-date" type="date" value="${existing? existing.paidDate : todayISO()}">
           </div>
         </div>
         <div class="field">
           <label>実際の支払額</label>
-          <input id="p-amount" type="number" placeholder="30000">
+          <input id="p-amount" type="number" placeholder="30000" value="${existing? existing.actualAmount : ''}">
         </div>
         <div class="modal-actions">
           <button class="btn btn-ghost" id="btn-cancel">キャンセル</button>
@@ -1492,6 +1676,7 @@ function renderAll(){
   else if(currentTab==='debts') renderDebts();
   else if(currentTab==='sim') renderSim();
   else if(currentTab==='calendar') renderCalendar();
+  else if(currentTab==='settings') renderSettings();
 }
 
 boot();
