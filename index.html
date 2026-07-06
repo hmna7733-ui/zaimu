@@ -863,9 +863,6 @@ function projectPayoff(d, extraMonthly=0){
   return monthsToPayoff(balance, d.interestRate||0, monthly);
 }
 function payoffDateForDebt(d, extra=0){
-  if((d.paymentType||'monthly')==='deadline' && d.finalDueDate){
-    return d.finalDueDate;
-  }
   const r = projectPayoff(d, extra);
   if(r.impossible) return null;
   return addMonths(todayISO(), r.months);
@@ -1346,11 +1343,14 @@ function simCardHTML(d){
   if(isDeadline){
     const required = d.finalDueDate ? requiredMonthlyAmount(d) : null;
     const diff = required!==null ? required - d.monthlyPlanned : null;
+    const actualProj = projectPayoff(d);
+    const actualPayoff = actualProj.impossible ? null : addMonths(todayISO(), actualProj.months);
     bodyHTML = `
     <div class="compare-row"><span>当初の残高 → 現在の残高</span><span class="v mono">${fmtYen(d.initialAmount)} → ${fmtYen(d.balance)}</span></div>
     <div class="compare-row"><span>利息</span><span class="v mono">${interestLabelForDebt(d)}</span></div>
-    <div class="compare-row"><span>最終期日</span><span class="v mono" style="color:var(--sage)">${d.finalDueDate? fmtDate(d.finalDueDate) : '未設定'}</span></div>
+    <div class="compare-row"><span>最終期日（目標）</span><span class="v mono" style="color:var(--sage)">${d.finalDueDate? fmtDate(d.finalDueDate) : '未設定'}</span></div>
     <div class="compare-row"><span>現在の月々返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned)}</span></div>
+    <div class="compare-row"><span>この返済額での完済予定日</span><span class="v mono" style="color:${actualPayoff && d.finalDueDate && actualPayoff>d.finalDueDate ? 'var(--rust)' : 'var(--sage)'};">${actualProj.impossible? '完済しません' : fmtDate(actualPayoff)}</span></div>
     <div class="compare-row"><span>逆算した必要月額</span><span class="v mono" style="font-size:17px;color:${diff!==null && diff>0.5 ? 'var(--rust)' : 'var(--sage)'};">${required!==null? fmtYen(required) : '最終期日を設定してください'}</span></div>
     ${diff!==null && diff>0.5 ? `<div class="hint" style="color:var(--rust);margin-top:6px;">現在の設定額では期日までに完済できません。あと${fmtYen(diff)}／月 上乗せが必要です。</div>` : ''}
     `;
@@ -1409,7 +1409,18 @@ function lenderDebtRowHTML(d){
   </div>`;
 }
 
+function groupPayoffDate(debts){
+  let latest = null;
+  debts.forEach(d=>{
+    const pd = payoffDateForDebt(d);
+    if(pd && (!latest || pd>latest)) latest = pd;
+  });
+  return latest;
+}
+
 function lenderCardHTML(group){
+  const payoff = groupPayoffDate(group.debts);
+  const countdown = payoff ? remainingYearsMonths(payoff) : null;
   return `
   <div class="sim-card">
     <div class="debt-name-wrap" style="margin-bottom:14px;justify-content:space-between;">
@@ -1418,6 +1429,7 @@ function lenderCardHTML(group){
     </div>
     <div class="compare-row"><span>合計残高</span><span class="v mono" style="font-size:18px;">${fmtYen(group.totalBalance)}</span></div>
     <div class="compare-row"><span>月々の返済合計</span><span class="v mono">${fmtYen(group.totalMonthly)}</span></div>
+    ${countdown ? `<div style="text-align:right;margin-top:4px;"><span class="rail-countdown">${countdown}</span></div>` : ''}
     <div class="due-list" style="margin-top:12px;">
       ${group.debts.map(d=>lenderDebtRowHTML(d)).join('')}
     </div>
