@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>返済ロードマップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --navy:#1E2A45;
+  --navy-2:#2E3B58;
+  --navy-soft:#4A5878;
+  --paper:#EDEAE2;
+  --card:#FFFFFF;
+  --ink:#232323;
+  --muted:#767268;
+  --line:#DEDACE;
+  --sage:#3E7C6F;
+  --sage-bg:#E3EFEC;
+  --amber:#C98A3B;
+  --amber-bg:#F6EBD9;
+  --rust:#B4472F;
+  --rust-bg:#F5E1DB;
+  --mono:'JetBrains Mono',monospace;
+  --serif:'Shippori Mincho',serif;
+  --sans:'Noto Sans JP',sans-serif;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(30,42,69,0.06), 0 6px 20px rgba(30,42,69,0.06);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--sans);
+  background:var(--paper);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--sage);color:#fff;}
+button{font-family:inherit;cursor:pointer;}
+input,select,textarea{font-family:inherit;}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+
+#app{
+  display:grid;
+  grid-template-columns:220px 1fr;
+  min-height:100vh;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar{
+  background:var(--navy);
+  color:#EDEAE2;
+  padding:28px 18px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  position:sticky;
+  top:0;
+  height:100vh;
+}
+.brand{
+  font-family:var(--serif);
+  font-size:20px;
+  font-weight:700;
+  color:#fff;
+  margin:0 8px 30px 8px;
+  letter-spacing:.03em;
+  line-height:1.4;
+}
+.brand small{
+  display:block;
+  font-family:var(--sans);
+  font-size:11px;
+  font-weight:400;
+  color:#9AA6C0;
+  letter-spacing:.15em;
+  margin-top:2px;
+}
+.nav-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:11px 12px;
+  border-radius:10px;
+  color:#C7CEE0;
+  font-size:14px;
+  font-weight:500;
+  border:none;
+  background:transparent;
+  text-align:left;
+  transition:background .15s ease, color .15s ease;
+}
+.nav-item .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5;flex-shrink:0;}
+.nav-item:hover{background:rgba(255,255,255,0.06);color:#fff;}
+.nav-item.active{background:#EDEAE2;color:var(--navy);font-weight:700;}
+.nav-item.active .dot{background:var(--sage);opacity:1;}
+.sidebar-foot{margin-top:auto;font-size:11px;color:#7C87A6;padding:0 8px;line-height:1.6;}
+
+/* ---------- Topbar ---------- */
+.topbar{
+  padding:24px 32px 0 32px;
+}
+.topbar-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  flex-wrap:wrap;
+  gap:16px;
+  margin-bottom:20px;
+}
+.page-title{
+  font-family:var(--serif);
+  font-size:26px;
+  font-weight:700;
+  margin:0;
+  color:var(--navy);
+}
+.page-sub{font-size:12.5px;color:var(--muted);margin-top:4px;}
+.btn{
+  border:none;border-radius:10px;padding:10px 18px;font-size:13.5px;font-weight:700;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.btn-primary{background:var(--navy);color:#fff;}
+.btn-primary:hover{background:#15203A;}
+.btn-ghost{background:transparent;color:var(--navy);border:1px solid var(--line);}
+.btn-ghost:hover{background:#fff;}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:8px;}
+
+.fab{
+  position:fixed;right:32px;bottom:32px;z-index:45;
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--navy);color:#fff;border:none;border-radius:30px;
+  padding:14px 22px;font-size:14px;font-weight:700;
+  box-shadow:0 10px 30px rgba(30,42,69,0.35);
+}
+.fab:hover{background:#15203A;}
+@media (max-width:880px){
+  .fab{right:18px;bottom:calc(78px + env(safe-area-inset-bottom));padding:13px 18px;}
+}
+
+main{padding:0 32px 60px 32px;}
+
+/* ---------- Summary strip ---------- */
+.summary-grid{
+  display:grid;
+  grid-template-columns:1.3fr 1fr 1fr 1fr;
+  gap:14px;
+  margin-bottom:28px;
+}
+.summary-card{
+  background:var(--card);
+  border-radius:var(--radius);
+  padding:18px 20px;
+  box-shadow:var(--shadow);
+  position:relative;
+  overflow:hidden;
+}
+.summary-card .label{font-size:11.5px;color:var(--muted);letter-spacing:.04em;font-weight:500;}
+.summary-card .value{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--navy);margin-top:6px;}
+.summary-card .value small{font-size:13px;font-weight:500;margin-left:2px;color:var(--muted);}
+.summary-card .foot{font-size:11.5px;margin-top:8px;color:var(--muted);}
+.summary-card.hero{background:var(--navy);color:#fff;}
+.summary-card.hero .label{color:#9AA6C0;}
+.summary-card.hero .value{color:#fff;}
+.summary-card.hero .foot{color:#9AA6C0;}
+
+.genre-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px;}
+.genre-card{background:var(--card);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);border-top:3px solid var(--line);}
+.genre-card.card{border-top-color:#3A4C8C;}
+.genre-card.person{border-top-color:var(--amber);}
+.genre-card.company{border-top-color:#6B4C9A;}
+.genre-card .ghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.genre-card .gname{font-size:13px;font-weight:700;color:var(--navy);}
+.genre-card .gcount{font-size:11px;color:var(--muted);}
+.genre-card .gnum{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--navy);}
+.genre-card .gsub{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+.genre-card .gsub b{font-family:var(--mono);color:var(--navy);font-weight:700;}
+@media (max-width:880px){.genre-grid{grid-template-columns:1fr;}}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;}
+.pill-sage{background:var(--sage-bg);color:var(--sage);}
+.pill-amber{background:var(--amber-bg);color:var(--amber);}
+.pill-rust{background:var(--rust-bg);color:var(--rust);}
+
+/* progress ring */
+.ring-wrap{display:flex;align-items:center;gap:14px;}
+.ring-wrap svg{flex-shrink:0;}
+
+/* ---------- Section headers ---------- */
+.section-head{display:flex;justify-content:space-between;align-items:center;margin:34px 0 14px 0;}
+.section-head h2{font-family:var(--serif);font-size:17px;margin:0;color:var(--navy);}
+.section-head .hint{font-size:12px;color:var(--muted);}
+
+/* ---------- Debt cards & rail ---------- */
+.debt-list{display:flex;flex-direction:column;gap:12px;}
+.debt-card{
+  background:var(--card);
+  border-radius:var(--radius);
+  padding:18px 22px;
+  box-shadow:var(--shadow);
+}
+.debt-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;}
+.debt-name-wrap{display:flex;align-items:center;gap:10px;}
+.type-badge{
+  font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:6px;letter-spacing:.02em;
+}
+.type-card{background:#E4E9F5;color:#3A4C8C;}
+.type-person{background:var(--amber-bg);color:var(--amber);}
+.type-company{background:#E7E2F0;color:#6B4C9A;}
+.debt-name{font-weight:700;font-size:15.5px;color:var(--navy);}
+.debt-lender{font-size:12px;color:var(--muted);margin-top:2px;}
+.debt-nums{display:flex;gap:26px;flex-wrap:wrap;}
+.numblock{text-align:right;}
+.numblock .k{font-size:10.5px;color:var(--muted);}
+.numblock .v{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--navy);}
+.numblock .v.rust{color:var(--rust);}
+.numblock .v.sage{color:var(--sage);}
+
+/* rail */
+.rail-wrap{margin-top:16px;}
+.rail-labels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-bottom:5px;}
+.rail-track{
+  position:relative;height:10px;background:#EDEAE2;border-radius:20px;overflow:visible;
+}
+.rail-fill{
+  position:absolute;left:0;top:0;bottom:0;border-radius:20px;
+  background:linear-gradient(90deg,#4E9384,var(--sage));
+}
+.rail-fill.warn{background:linear-gradient(90deg,#DBA45C,var(--amber));}
+.rail-fill.danger{background:linear-gradient(90deg,#C96A50,var(--rust));}
+.rail-today{
+  position:absolute;top:-5px;width:2px;height:20px;background:var(--navy);
+}
+.rail-today::after{
+  content:'今日';
+  position:absolute;top:-16px;left:50%;transform:translateX(-50%);
+  font-size:9.5px;color:var(--navy);font-weight:700;white-space:nowrap;
+}
+.debt-actions{display:flex;gap:8px;margin-top:14px;}
+
+/* ---------- Forms / Modal ---------- */
+.overlay{
+  position:fixed;inset:0;background:rgba(30,32,40,0.45);
+  display:flex;align-items:center;justify-content:center;z-index:50;
+  padding:20px;
+}
+.modal{
+  background:#fff;border-radius:16px;padding:26px 28px;width:100%;max-width:480px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.25);
+  max-height:88vh;overflow:auto;
+}
+.modal h3{font-family:var(--serif);margin:0 0 18px 0;color:var(--navy);font-size:18px;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:5px;}
+.field input,.field select,.field textarea{
+  width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:14px;background:#FBFAF7;
+}
+.field input:focus,.field select:focus{outline:2px solid var(--navy-soft);outline-offset:1px;background:#fff;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+
+/* ---------- Sim tab ---------- */
+.sim-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:20px;}
+.sim-card{background:var(--card);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);}
+.sim-card h3{font-family:var(--serif);font-size:15.5px;margin:0 0 14px 0;color:var(--navy);}
+.slider-row{display:flex;align-items:center;gap:14px;margin:14px 0;}
+.slider-row input[type=range]{flex:1;accent-color:var(--navy);}
+.slider-val{font-family:var(--mono);font-weight:700;color:var(--navy);min-width:90px;text-align:right;}
+.compare-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed var(--line);font-size:13.5px;}
+.compare-row:last-child{border-bottom:none;}
+.compare-row .v{font-family:var(--mono);font-weight:700;}
+.strategy-toggle{display:flex;gap:8px;margin-bottom:16px;}
+.toggle-btn{flex:1;padding:9px;border-radius:9px;border:1px solid var(--line);background:#fff;font-size:13px;font-weight:700;color:var(--muted);}
+.toggle-btn.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.gantt-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.gantt-label{width:110px;font-size:12px;color:var(--navy);font-weight:700;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gantt-track{flex:1;height:16px;background:#EDEAE2;border-radius:8px;position:relative;}
+.gantt-bar{position:absolute;top:0;bottom:0;left:0;border-radius:8px;background:linear-gradient(90deg,#4E9384,var(--sage));}
+.gantt-month{font-family:var(--mono);font-size:11px;color:var(--muted);width:70px;text-align:right;flex-shrink:0;}
+
+/* ---------- Calendar tab ---------- */
+.due-list{display:flex;flex-direction:column;gap:0;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+.due-row{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--paper);}
+.due-row:last-child{border-bottom:none;}
+.due-date-badge{
+  width:52px;height:52px;border-radius:10px;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;
+}
+.due-date-badge .d{font-family:var(--mono);font-weight:700;font-size:18px;color:var(--navy);line-height:1;}
+.due-date-badge .m{font-size:9.5px;color:var(--muted);}
+.due-info{flex:1;}
+.due-info .n{font-weight:700;font-size:14px;color:var(--navy);}
+.due-info .s{font-size:11.5px;color:var(--muted);}
+.due-amt{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--navy);text-align:right;}
+
+/* ---------- Empty ---------- */
+.empty{padding:50px 20px;text-align:center;color:var(--muted);font-size:13.5px;}
+
+/* ---------- Mobile ---------- */
+.mobile-tabbar{display:none;}
+.hidden{display:none !important;}
+
+/* ---------- Auth / setup gate ---------- */
+#gate-root{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:var(--navy);padding:20px;
+}
+.gate-card{
+  background:#fff;border-radius:18px;padding:34px 32px;width:100%;max-width:440px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.3);
+}
+.gate-brand{font-family:var(--serif);font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px;}
+.gate-sub{font-size:12.5px;color:var(--muted);margin-bottom:24px;line-height:1.6;}
+.gate-tabs{display:flex;gap:6px;margin-bottom:20px;background:var(--paper);padding:4px;border-radius:10px;}
+.gate-tab{flex:1;padding:9px;border:none;background:transparent;border-radius:8px;font-size:13px;font-weight:700;color:var(--muted);}
+.gate-tab.active{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.gate-error{background:var(--rust-bg);color:var(--rust);font-size:12.5px;padding:10px 12px;border-radius:9px;margin-bottom:14px;line-height:1.5;}
+.gate-links{display:flex;flex-direction:column;gap:8px;margin-top:18px;text-align:center;}
+.gate-link{background:none;border:none;color:var(--navy-soft);font-size:12.5px;text-decoration:underline;padding:4px;}
+.gate-help{font-size:11.5px;color:var(--muted);line-height:1.7;background:var(--paper);border-radius:10px;padding:12px 14px;margin-top:16px;}
+.gate-help ol{margin:6px 0 0 18px;padding:0;}
+textarea#f-fbconfig{font-family:var(--mono);font-size:12px;min-height:120px;}
+
+/* ---------- Sync widget (sidebar) ---------- */
+.sync-box{border-top:1px solid rgba(255,255,255,0.1);margin-top:10px;padding-top:14px;}
+.sync-email{font-size:11.5px;color:#C7CEE0;word-break:break-all;margin-bottom:8px;}
+.sync-status{display:flex;align-items:center;gap:6px;font-size:11px;color:#9AA6C0;margin-bottom:10px;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#9AA6C0;flex-shrink:0;}
+.sync-dot.ok{background:#5FBF9F;}
+.sync-dot.busy{background:#E0B454;animation:pulse 1s infinite;}
+.sync-dot.err{background:#D9705C;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.sync-actions{display:flex;gap:6px;}
+.sync-btn{flex:1;background:rgba(255,255,255,0.08);border:none;color:#EDEAE2;font-size:11.5px;font-weight:700;padding:8px 6px;border-radius:8px;}
+.sync-btn:hover{background:rgba(255,255,255,0.15);}
+.sync-btn.logout{color:#E0A490;}
+@media (max-width:880px){
+  #app{grid-template-columns:1fr;}
+  .sidebar{display:none;}
+  .topbar{padding:20px 16px 0 16px;}
+  main{padding:0 16px 90px 16px;}
+  .summary-grid{grid-template-columns:1fr 1fr;}
+  .sim-grid{grid-template-columns:1fr;}
+  .mobile-tabbar{
+    display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--navy);
+    z-index:40;padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  .mobile-tabbar button{
+    flex:1;background:none;border:none;color:#9AA6C0;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;border-radius:8px;
+  }
+  .mobile-tabbar button.active{color:#fff;background:rgba(255,255,255,0.08);}
+  .debt-nums{gap:16px;}
+  .row2{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div id="gate-root" class="hidden"></div>
+<div id="app" class="hidden">
+  <aside class="sidebar">
+    <div class="brand">返済ロードマップ<small>REPAYMENT LEDGER</small></div>
+    <nav id="nav"></nav>
+    <div class="sidebar-foot" id="sidebar-foot"></div>
+  </aside>
+
+  <div>
+    <header class="topbar" id="topbar"></header>
+    <main id="view-root"></main>
+  </div>
+</div>
+
+<nav class="mobile-tabbar" id="mobile-nav"></nav>
+<div id="modal-root"></div>
+
+<script>
+/* =========================================================
+   State & storage
+========================================================= */
+const LS_KEY = 'repay_ledger_v1';
+
+const TABS = [
+  {id:'dashboard', label:'ダッシュボード', icon:'◆'},
+  {id:'debts',     label:'借入一覧',       icon:'◆'},
+  {id:'sim',       label:'返済シミュレーション', icon:'◆'},
+  {id:'calendar',  label:'支払記録・期日', icon:'◆'},
+];
+
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function addMonths(dateStr, n){
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth()+n);
+  return d.toISOString().slice(0,10);
+}
+function fmtDate(d){
+  if(!d) return '—';
+  const dt = new Date(d);
+  return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+}
+function fmtYen(n){
+  n = Math.round(n||0);
+  return '¥' + n.toLocaleString('ja-JP');
+}
+function monthKey(d=new Date()){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+function seedData(){
+  const today = new Date();
+  const start = new Date(today); start.setMonth(start.getMonth()-6);
+  return {
+    debts:[
+      {
+        id: uid(), name:'楽天カード', type:'card', lender:'楽天カード株式会社',
+        initialAmount: 500000, balance: 320000, interestRate: 15.0,
+        monthlyPlanned: 30000, dueDay: 27,
+        startDate: start.toISOString().slice(0,10), notes:'リボ払い分'
+      },
+      {
+        id: uid(), name:'父からの借入', type:'person', lender:'父',
+        initialAmount: 800000, balance: 500000, interestRate: 0,
+        monthlyPlanned: 20000, dueDay: 5,
+        startDate: start.toISOString().slice(0,10), notes:'開業資金の一部'
+      },
+      {
+        id: uid(), name:'運転資金 借入', type:'company', lender:'〇〇商事株式会社',
+        initialAmount: 1500000, balance: 1200000, interestRate: 3.0,
+        monthlyPlanned: 50000, dueDay: 15,
+        startDate: start.toISOString().slice(0,10), notes:''
+      }
+    ],
+    payments:[]
+  };
+}
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  const seed = seedData();
+  localStorage.setItem(LS_KEY, JSON.stringify(seed));
+  return seed;
+}
+function saveLocal(state){
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+}
+function save(state){
+  saveLocal(state);
+  queueCloudPush();
+}
+
+let state = load();
+let currentTab = 'dashboard';
+
+/* =========================================================
+   クラウド同期（Firebase Authentication + Firestore）
+========================================================= */
+const FB_CONFIG_KEY = 'repay_firebase_config';
+const FB_SKIP_KEY   = 'repay_auth_skip';
+
+let fbApp = null, fbAuth = null, fbDb = null;
+let currentUser = null;
+let syncState = 'offline';   // offline | syncing | synced | error
+let lastSyncedAt = null;
+let cloudPushTimer = null;
+let authMode = 'login'; // 'login' | 'signup'
+
+function getSavedFirebaseConfig(){
+  try{
+    const raw = localStorage.getItem(FB_CONFIG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
+function parseFirebaseConfigInput(text){
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if(start===-1 || end===-1 || end<start) throw new Error('設定の形式を読み取れませんでした');
+  const objText = text.slice(start, end+1);
+  const obj = Function('"use strict"; return (' + objText + ');')();
+  if(!obj.apiKey || !obj.projectId) throw new Error('apiKey / projectId が見つかりません');
+  return obj;
+}
+
+function initFirebase(config){
+  if(fbApp) return;
+  fbApp = firebase.initializeApp(config);
+  fbAuth = firebase.auth();
+  fbDb = firebase.firestore();
+  fbAuth.onAuthStateChanged(handleAuthChange);
+}
+
+function userDocRef(){
+  return fbDb.collection('repayLedger').doc(currentUser.uid);
+}
+
+function handleAuthChange(user){
+  if(user){
+    currentUser = user;
+    localStorage.removeItem(FB_SKIP_KEY);
+    syncState = 'syncing';
+    showApp();
+    renderSidebarFoot();
+    userDocRef().get().then(doc=>{
+      if(doc.exists){
+        const data = doc.data();
+        state = { debts: data.debts||[], payments: data.payments||[] };
+        saveLocal(state);
+      }else{
+        return userDocRef().set({
+          debts: state.debts||[], payments: state.payments||[],
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }).then(()=>{
+      syncState = 'synced';
+      lastSyncedAt = new Date();
+      currentTab = 'dashboard';
+      renderAll();
+    }).catch(err=>{
+      console.error(err);
+      syncState = 'error';
+      renderSidebarFoot();
+    });
+  }else{
+    currentUser = null;
+    if(localStorage.getItem(FB_SKIP_KEY)==='1'){
+      state = load();
+      showApp();
+      renderAll();
+    }else{
+      showGate();
+      renderLoginScreen();
+    }
+  }
+}
+
+function queueCloudPush(){
+  if(!currentUser) return;
+  syncState = 'syncing';
+  renderSidebarFoot();
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(()=>{
+    userDocRef().set({
+      debts: state.debts, payments: state.payments,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(()=>{
+      syncState = 'synced';
+      lastSyncedAt = new Date();
+      renderSidebarFoot();
+    }).catch(err=>{
+      console.error(err);
+      syncState = 'error';
+      renderSidebarFoot();
+    });
+  }, 1200);
+}
+
+function manualPullFromCloud(){
+  if(!currentUser) return;
+  syncState = 'syncing';
+  renderSidebarFoot();
+  userDocRef().get().then(doc=>{
+    if(doc.exists){
+      const data = doc.data();
+      state = { debts: data.debts||[], payments: data.payments||[] };
+      saveLocal(state);
+    }
+    syncState = 'synced';
+    lastSyncedAt = new Date();
+    renderAll();
+  }).catch(err=>{
+    console.error(err);
+    syncState = 'error';
+    renderSidebarFoot();
+  });
+}
+
+function doLogout(){
+  if(!confirm('ログアウトしますか？この端末に保存されているデータは削除されます。')) return;
+  localStorage.removeItem(LS_KEY);
+  fbAuth.signOut();
+}
+
+function showGate(){
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('gate-root').classList.remove('hidden');
+}
+function showApp(){
+  document.getElementById('gate-root').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+}
+
+/* ---------- ゲート画面：初回のFirebase設定 ---------- */
+function renderSetupScreen(){
+  const root = document.getElementById('gate-root');
+  root.innerHTML = `
+    <div class="gate-card">
+      <div class="gate-brand">クラウド同期の設定</div>
+      <div class="gate-sub">メールアドレスとパスワードで、スマホ・PCなど複数端末のデータを同期できるようにします。ご自身のFirebaseプロジェクトの設定情報を貼り付けてください。</div>
+      <div class="field">
+        <label>Firebase設定（firebaseConfig）</label>
+        <textarea id="f-fbconfig" placeholder='Firebaseコンソール&gt;プロジェクトの設定 からコピーした
+const firebaseConfig = { apiKey: "...", authDomain: "...", ... };
+をそのまま貼り付けてください'></textarea>
+      </div>
+      <div id="setup-error"></div>
+      <div class="modal-actions" style="justify-content:stretch;">
+        <button class="btn btn-primary" id="btn-setup-save" style="width:100%;justify-content:center;">保存して同期を有効にする</button>
+      </div>
+      <div class="gate-links">
+        <button class="gate-link" id="btn-skip-setup">あとで設定する（この端末だけで使う）</button>
+      </div>
+      <div class="gate-help">
+        <b>Firebase設定の取得手順</b>
+        <ol>
+          <li>Firebaseコンソールでプロジェクトを新規作成（無料枠でOK）</li>
+          <li>「Authentication」→「Sign-in method」で「メール/パスワード」を有効化</li>
+          <li>「Firestore Database」を作成（本番モードでOK）</li>
+          <li>「プロジェクトの設定」→「マイアプリ」でWebアプリを追加し、表示された<span class="mono">firebaseConfig</span>をコピー</li>
+        </ol>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-setup-save').addEventListener('click', ()=>{
+    const text = document.getElementById('f-fbconfig').value.trim();
+    const errBox = document.getElementById('setup-error');
+    errBox.innerHTML = '';
+    try{
+      const cfg = parseFirebaseConfigInput(text);
+      localStorage.setItem(FB_CONFIG_KEY, JSON.stringify(cfg));
+      initFirebase(cfg);
+      renderLoginScreen();
+    }catch(e){
+      errBox.innerHTML = `<div class="gate-error">読み取りに失敗しました：${escapeHTML(e.message)}</div>`;
+    }
+  });
+  document.getElementById('btn-skip-setup').addEventListener('click', ()=>{
+    localStorage.setItem(FB_SKIP_KEY, '1');
+    state = load();
+    showApp();
+    renderAll();
+  });
+}
+
+/* ---------- ゲート画面：ログイン / 新規登録 ---------- */
+function renderLoginScreen(errorMsg=''){
+  const root = document.getElementById('gate-root');
+  showGate();
+  root.innerHTML = `
+    <div class="gate-card">
+      <div class="gate-brand">返済ロードマップ</div>
+      <div class="gate-sub">メールアドレスとパスワードでログインすると、他の端末とデータが同期されます。</div>
+      <div class="gate-tabs">
+        <button class="gate-tab ${authMode==='login'?'active':''}" data-mode="login">ログイン</button>
+        <button class="gate-tab ${authMode==='signup'?'active':''}" data-mode="signup">新規登録</button>
+      </div>
+      ${errorMsg ? `<div class="gate-error">${escapeHTML(errorMsg)}</div>` : ''}
+      <div class="field"><label>メールアドレス</label><input id="f-email" type="email" placeholder="you@example.com"></div>
+      <div class="field"><label>パスワード（6文字以上）</label><input id="f-password" type="password" placeholder="••••••••"></div>
+      <div class="modal-actions" style="justify-content:stretch;">
+        <button class="btn btn-primary" id="btn-auth-submit" style="width:100%;justify-content:center;">${authMode==='login'?'ログイン':'登録してはじめる'}</button>
+      </div>
+      <div class="gate-links">
+        <button class="gate-link" id="btn-reconfigure">Firebase設定を変更する</button>
+        <button class="gate-link" id="btn-skip-login">ログインせずこの端末だけで使う</button>
+      </div>
+    </div>
+  `;
+  root.querySelectorAll('.gate-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ authMode = btn.dataset.mode; renderLoginScreen(); });
+  });
+  document.getElementById('btn-reconfigure').addEventListener('click', ()=>{
+    localStorage.removeItem(FB_CONFIG_KEY);
+    fbApp = null; fbAuth = null; fbDb = null;
+    renderSetupScreen();
+  });
+  document.getElementById('btn-skip-login').addEventListener('click', ()=>{
+    localStorage.setItem(FB_SKIP_KEY, '1');
+    state = load();
+    showApp();
+    renderAll();
+  });
+  document.getElementById('btn-auth-submit').addEventListener('click', ()=>{
+    const email = document.getElementById('f-email').value.trim();
+    const pw = document.getElementById('f-password').value;
+    if(!email || pw.length<6){ renderLoginScreen('メールアドレスと6文字以上のパスワードを入力してください'); return; }
+    const action = authMode==='login'
+      ? fbAuth.signInWithEmailAndPassword(email, pw)
+      : fbAuth.createUserWithEmailAndPassword(email, pw);
+    action.catch(err=>{ renderLoginScreen(fbErrorText(err)); });
+  });
+}
+
+function fbErrorText(err){
+  const map = {
+    'auth/invalid-email':'メールアドレスの形式が正しくありません',
+    'auth/user-not-found':'アカウントが見つかりません。新規登録してください',
+    'auth/wrong-password':'パスワードが違います',
+    'auth/email-already-in-use':'このメールアドレスは既に登録されています',
+    'auth/weak-password':'パスワードは6文字以上にしてください',
+    'auth/invalid-credential':'メールアドレスまたはパスワードが違います',
+  };
+  return map[err.code] || ('エラー：' + err.message);
+}
+
+/* ---------- サイドバー：同期状態表示 ---------- */
+function renderSidebarFoot(){
+  const el = document.getElementById('sidebar-foot');
+  if(!el) return;
+  if(currentUser){
+    const dotCls = syncState==='synced' ? 'ok' : syncState==='syncing' ? 'busy' : syncState==='error' ? 'err' : '';
+    const label = syncState==='synced' ? `同期済み${lastSyncedAt? '　'+lastSyncedAt.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):''}`
+                : syncState==='syncing' ? '同期中…'
+                : syncState==='error' ? '同期エラー'
+                : '待機中';
+    el.innerHTML = `
+      <div class="sync-box">
+        <div class="sync-email">${escapeHTML(currentUser.email)}</div>
+        <div class="sync-status"><span class="sync-dot ${dotCls}"></span>${label}</div>
+        <div class="sync-actions">
+          <button class="sync-btn" id="btn-manual-sync">↻ 更新</button>
+          <button class="sync-btn logout" id="btn-logout">ログアウト</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('btn-manual-sync').addEventListener('click', manualPullFromCloud);
+    document.getElementById('btn-logout').addEventListener('click', doLogout);
+  }else{
+    el.innerHTML = `
+      <div class="sync-box">
+        <div class="sync-status"><span class="sync-dot"></span>ローカル保存のみ</div>
+        <div class="sync-actions">
+          <button class="sync-btn" id="btn-setup-cloud" style="flex:1 1 100%;">クラウド同期を設定</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('btn-setup-cloud').addEventListener('click', ()=>{
+      showGate();
+      renderSetupScreen();
+    });
+  }
+}
+
+function boot(){
+  const cfg = getSavedFirebaseConfig();
+  if(!cfg){
+    if(localStorage.getItem(FB_SKIP_KEY)==='1'){
+      showApp();
+      renderAll();
+    }else{
+      showGate();
+      renderSetupScreen();
+    }
+    return;
+  }
+  initFirebase(cfg);
+  // handleAuthChange (via onAuthStateChanged) will render the correct screen
+}
+
+
+/* =========================================================
+   Derived calculations
+========================================================= */
+function totalBalance(){ return state.debts.reduce((s,d)=>s+d.balance,0); }
+function totalMonthlyPlanned(){ return state.debts.reduce((s,d)=>s+d.monthlyPlanned,0); }
+function actualThisMonth(){
+  const mk = monthKey();
+  return state.payments.filter(p=>p.month===mk).reduce((s,p)=>s+(p.actualAmount||0),0);
+}
+function paidSoFar(d){
+  return state.payments.filter(p=>p.debtId===d.id).reduce((s,p)=>s+(p.actualAmount||0), d.initialAmount-d.balance>0? 0:0);
+}
+function progressRatio(d){
+  if(d.initialAmount<=0) return 0;
+  return Math.min(1, Math.max(0,(d.initialAmount-d.balance)/d.initialAmount));
+}
+function monthsToPayoff(balance, annualRatePct, monthlyPayment){
+  if(monthlyPayment<=0) return {impossible:true};
+  const rate = (annualRatePct||0)/100/12;
+  let bal = balance, months=0, totalInterest=0;
+  while(bal>0.5 && months<600){
+    const interest = bal*rate;
+    const principal = monthlyPayment - interest;
+    if(principal<=0) return {impossible:true};
+    bal -= principal;
+    totalInterest += interest;
+    months++;
+  }
+  return {months, totalInterest};
+}
+function payoffDateForDebt(d, extra=0){
+  const r = monthsToPayoff(d.balance, d.interestRate, d.monthlyPlanned+extra);
+  if(r.impossible) return null;
+  return addMonths(todayISO(), r.months);
+}
+function overallPayoffDate(){
+  let latest = null;
+  state.debts.forEach(d=>{
+    const pd = payoffDateForDebt(d);
+    if(pd && (!latest || pd>latest)) latest = pd;
+  });
+  return latest;
+}
+function nextDueDate(d){
+  const today = new Date();
+  let due = new Date(today.getFullYear(), today.getMonth(), d.dueDay);
+  if(due < today) due.setMonth(due.getMonth()+1);
+  return due.toISOString().slice(0,10);
+}
+function statusOf(d){
+  const nd = new Date(nextDueDate(d));
+  const diffDays = Math.ceil((nd - new Date())/86400000);
+  if(diffDays<=3) return 'danger';
+  if(diffDays<=10) return 'warn';
+  return 'ok';
+}
+function typeLabel(t){ return {card:'カード', person:'個人', company:'法人'}[t] || t; }
+
+function genreTotals(){
+  const types = ['card','person','company'];
+  return types.map(t=>{
+    const list = state.debts.filter(d=>d.type===t);
+    return {
+      type: t,
+      count: list.length,
+      balance: list.reduce((s,d)=>s+d.balance,0),
+      planned: list.reduce((s,d)=>s+d.monthlyPlanned,0),
+      initial: list.reduce((s,d)=>s+d.initialAmount,0),
+    };
+  });
+}
+
+/* portfolio simulation: snowball / avalanche with extra monthly budget */
+function simulatePortfolio(extraBudget, strategy){
+  let list = state.debts.map(d=>({id:d.id, name:d.name, bal:d.balance, rate:d.interestRate||0, min:d.monthlyPlanned, paidMonth:null}));
+  let months = 0;
+  const orderFn = ()=> list.filter(d=>d.bal>0.5).sort((a,b)=> strategy==='avalanche' ? b.rate-a.rate : a.bal-b.bal);
+  while(list.some(d=>d.bal>0.5) && months<480){
+    months++;
+    // accrue interest & minimum payments
+    list.forEach(d=>{
+      if(d.bal<=0.5) return;
+      const r = d.rate/100/12;
+      d.bal += d.bal*r;
+      const pay = Math.min(d.min, d.bal);
+      d.bal -= pay;
+    });
+    // allocate extra to priority target
+    let avail = extraBudget;
+    for(const d of orderFn()){
+      if(avail<=0) break;
+      const pay = Math.min(avail, d.bal);
+      d.bal -= pay;
+      avail -= pay;
+    }
+    list.forEach(d=>{
+      if(d.bal<=0.5 && d.paidMonth===null){ d.paidMonth = months; d.bal = 0; }
+    });
+  }
+  return list;
+}
+
+/* =========================================================
+   Rendering
+========================================================= */
+function renderNav(){
+  const nav = document.getElementById('nav');
+  nav.innerHTML = TABS.map(t=>`
+    <button class="nav-item ${currentTab===t.id?'active':''}" data-tab="${t.id}">
+      <span class="dot"></span>${t.label}
+    </button>
+  `).join('');
+  nav.querySelectorAll('.nav-item').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ currentTab = btn.dataset.tab; renderAll(); });
+  });
+
+  const mnav = document.getElementById('mobile-nav');
+  mnav.innerHTML = TABS.map(t=>`
+    <button class="${currentTab===t.id?'active':''}" data-tab="${t.id}">${t.label}</button>
+  `).join('');
+  mnav.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ currentTab = btn.dataset.tab; renderAll(); });
+  });
+}
+
+function renderTopbar(){
+  const titles = {
+    dashboard:['ダッシュボード','借入全体の状況をひと目で確認'],
+    debts:['借入一覧','カード・個人・法人からの借入をまとめて管理'],
+    sim:['返済シミュレーション','繰上げ返済や返済戦略の効果を試算'],
+    calendar:['支払記録・期日','今月の支払実績と、今後の返済期日']
+  };
+  const [title, sub] = titles[currentTab];
+  const topbar = document.getElementById('topbar');
+  let actionBtn = '';
+  if(currentTab==='calendar') actionBtn = `<button class="btn btn-primary" id="btn-add-payment">＋ 支払実績を記録</button>`;
+  topbar.innerHTML = `
+    <div class="topbar-row">
+      <div>
+        <h1 class="page-title">${title}</h1>
+        <div class="page-sub">${sub}</div>
+      </div>
+      ${actionBtn}
+    </div>
+  `;
+  const addPayBtn = document.getElementById('btn-add-payment');
+  if(addPayBtn) addPayBtn.addEventListener('click', ()=>openPaymentModal());
+
+  // 借入追加は右下のフローティングボタンに
+  const oldFab = document.getElementById('fab-add-debt');
+  if(oldFab) oldFab.remove();
+  if(currentTab==='debts'){
+    const fab = document.createElement('button');
+    fab.id = 'fab-add-debt';
+    fab.className = 'fab';
+    fab.innerHTML = '＋ 借入を追加';
+    fab.addEventListener('click', ()=>openDebtModal());
+    document.body.appendChild(fab);
+  }
+}
+
+function ringSVG(ratio, size=72, stroke=8, color='var(--sage)'){
+  const r = (size-stroke)/2;
+  const c = 2*Math.PI*r;
+  const off = c*(1-ratio);
+  return `
+  <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="${stroke}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+      stroke-dasharray="${c}" stroke-dashoffset="${off}" stroke-linecap="round"
+      transform="rotate(-90 ${size/2} ${size/2})"/>
+  </svg>`;
+}
+
+function renderDashboard(){
+  const root = document.getElementById('view-root');
+  const tBal = totalBalance();
+  const tPlanned = totalMonthlyPlanned();
+  const tActual = actualThisMonth();
+  const payoff = overallPayoffDate();
+  const budgetRatio = tPlanned>0 ? Math.min(1, tActual/tPlanned) : 0;
+  const diff = tActual - tPlanned;
+
+  const sortedByDue = [...state.debts].sort((a,b)=> new Date(nextDueDate(a)) - new Date(nextDueDate(b)));
+  const nextUp = sortedByDue.slice(0,3);
+
+  root.innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card hero">
+        <div class="label">借入総残高</div>
+        <div class="value">${fmtYen(tBal)}</div>
+        <div class="foot">${state.debts.length}件の借入 ・ 完済見込み ${fmtDate(payoff)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">今月の予算</div>
+        <div class="value">${fmtYen(tPlanned)}</div>
+        <div class="foot">毎月の約定返済合計</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">今月の実績</div>
+        <div class="value">${fmtYen(tActual)}</div>
+        <div class="foot">${diff>=0 ? `<span class="pill pill-sage">予算内 +${fmtYen(Math.abs(diff))}</span>` : `<span class="pill pill-rust">未達 -${fmtYen(Math.abs(diff))}</span>`}</div>
+      </div>
+      <div class="summary-card">
+        <div class="ring-wrap">
+          ${ringSVG(budgetRatio, 64, 7, 'var(--sage)')}
+          <div>
+            <div class="label">予算消化率</div>
+            <div class="value" style="font-size:20px;">${Math.round(budgetRatio*100)}<small>%</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${genreCardsHTML()}
+
+    <div class="section-head">
+      <h2>返済レール（全体）</h2>
+      <div class="hint">開始日から完済予定日までの進捗</div>
+    </div>
+    <div class="debt-list">
+      ${state.debts.map(d=>debtCardHTML(d, false)).join('') || `<div class="empty">借入がまだ登録されていません。</div>`}
+    </div>
+
+    <div class="section-head">
+      <h2>直近の返済期日</h2>
+      <div class="hint">支払記録タブから記録できます</div>
+    </div>
+    <div class="due-list">
+      ${nextUp.map(d=>dueRowHTML(d)).join('') || `<div class="empty">予定はありません。</div>`}
+    </div>
+  `;
+  bindDebtCardActions();
+}
+
+function railHTML(d){
+  const ratio = progressRatio(d);
+  const status = statusOf(d);
+  const cls = status==='danger' ? 'danger' : status==='warn' ? 'warn' : '';
+  const payoff = payoffDateForDebt(d);
+  const totalSpan = new Date(payoff||todayISO()) - new Date(d.startDate);
+  const elapsed = new Date() - new Date(d.startDate);
+  const todayPos = totalSpan>0 ? Math.min(96, Math.max(2,(elapsed/totalSpan)*100)) : 50;
+  return `
+    <div class="rail-wrap">
+      <div class="rail-labels">
+        <span>開始 ${fmtDate(d.startDate)}</span>
+        <span>完済予定 ${fmtDate(payoff)}</span>
+      </div>
+      <div class="rail-track">
+        <div class="rail-fill ${cls}" style="width:${(ratio*100).toFixed(1)}%"></div>
+        <div class="rail-today" style="left:${todayPos}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+function debtCardHTML(d, withActions=true){
+  const ratio = progressRatio(d);
+  const status = statusOf(d);
+  const pillCls = status==='danger'?'pill-rust':status==='warn'?'pill-amber':'pill-sage';
+  const pillText = status==='danger'?'期日間近':status==='warn'?'まもなく期日':'順調';
+  const typeCls = 'type-'+d.type;
+  return `
+  <div class="debt-card" data-id="${d.id}">
+    <div class="debt-top">
+      <div>
+        <div class="debt-name-wrap">
+          <span class="type-badge ${typeCls}">${typeLabel(d.type)}</span>
+          <span class="debt-name">${escapeHTML(d.name)}</span>
+          <span class="pill ${pillCls}">${pillText}</span>
+        </div>
+        <div class="debt-lender">${escapeHTML(d.lender||'')} ${d.interestRate?` ・ 金利 ${d.interestRate}%`:' ・ 無利息'}</div>
+      </div>
+      <div class="debt-nums">
+        <div class="numblock"><div class="k">残高</div><div class="v mono">${fmtYen(d.balance)}</div></div>
+        <div class="numblock"><div class="k">月々予定</div><div class="v mono">${fmtYen(d.monthlyPlanned)}</div></div>
+        <div class="numblock"><div class="k">次回期日</div><div class="v mono">${fmtDate(nextDueDate(d))}</div></div>
+        <div class="numblock"><div class="k">進捗</div><div class="v mono sage">${Math.round(ratio*100)}%</div></div>
+      </div>
+    </div>
+    ${railHTML(d)}
+    ${withActions ? `
+    <div class="debt-actions">
+      <button class="btn btn-ghost btn-sm" data-action="edit">編集</button>
+      <button class="btn btn-ghost btn-sm" data-action="pay">支払を記録</button>
+      <button class="btn btn-ghost btn-sm" data-action="delete" style="color:var(--rust);border-color:var(--rust-bg);">削除</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function dueRowHTML(d){
+  const nd = new Date(nextDueDate(d));
+  return `
+  <div class="due-row">
+    <div class="due-date-badge"><div class="d">${nd.getDate()}</div><div class="m">${nd.getMonth()+1}月</div></div>
+    <div class="due-info">
+      <div class="n">${escapeHTML(d.name)}</div>
+      <div class="s">${typeLabel(d.type)} ・ ${escapeHTML(d.lender||'')}</div>
+    </div>
+    <div class="due-amt">${fmtYen(d.monthlyPlanned)}</div>
+  </div>`;
+}
+
+function genreCardsHTML(){
+  const totals = genreTotals();
+  const icon = {card:'card', person:'person', company:'company'};
+  return `
+    <div class="genre-grid">
+      ${totals.map(t=>`
+        <div class="genre-card ${icon[t.type]}">
+          <div class="ghead">
+            <span class="gname">${typeLabel(t.type)}</span>
+            <span class="gcount">${t.count}件</span>
+          </div>
+          <div class="gnum">${fmtYen(t.balance)}</div>
+          <div class="gsub"><span>月々予定合計</span><b>${fmtYen(t.planned)}</b></div>
+          <div class="gsub"><span>返済進捗</span><b>${t.initial>0? Math.round((1-t.balance/t.initial)*100):0}%</b></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderDebts(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `
+    ${genreCardsHTML()}
+    <div class="debt-list">
+      ${state.debts.map(d=>debtCardHTML(d, true)).join('') || `<div class="empty">まだ借入がありません。右上の「＋ 借入を追加」から登録してください。</div>`}
+    </div>
+  `;
+  bindDebtCardActions();
+}
+
+function bindDebtCardActions(){
+  document.querySelectorAll('.debt-card').forEach(card=>{
+    const id = card.dataset.id;
+    const d = state.debts.find(x=>x.id===id);
+    card.querySelectorAll('[data-action]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const act = btn.dataset.action;
+        if(act==='edit') openDebtModal(d);
+        if(act==='pay') openPaymentModal(d);
+        if(act==='delete'){
+          if(confirm(`「${d.name}」を削除しますか？関連する支払記録も削除されます。`)){
+            state.debts = state.debts.filter(x=>x.id!==id);
+            state.payments = state.payments.filter(p=>p.debtId!==id);
+            save(state);
+            renderAll();
+          }
+        }
+      });
+    });
+  });
+}
+
+/* ---------- Simulation tab ---------- */
+let simSelectedId = null;
+let simExtra = 0;
+let simStrategy = 'avalanche';
+let simBudget = 0;
+
+function renderSim(){
+  const root = document.getElementById('view-root');
+  if(state.debts.length===0){
+    root.innerHTML = `<div class="empty">シミュレーションには借入データが必要です。「借入一覧」から登録してください。</div>`;
+    return;
+  }
+  if(!simSelectedId) simSelectedId = state.debts[0].id;
+  const d = state.debts.find(x=>x.id===simSelectedId);
+
+  const base = monthsToPayoff(d.balance, d.interestRate, d.monthlyPlanned);
+  const withExtra = monthsToPayoff(d.balance, d.interestRate, d.monthlyPlanned+simExtra);
+  const basePayoff = base.impossible? null : addMonths(todayISO(), base.months);
+  const extraPayoff = withExtra.impossible? null : addMonths(todayISO(), withExtra.months);
+  const monthsSaved = (!base.impossible && !withExtra.impossible) ? (base.months - withExtra.months) : 0;
+  const interestSaved = (!base.impossible && !withExtra.impossible) ? (base.totalInterest - withExtra.totalInterest) : 0;
+
+  const portfolioNoExtra = simulatePortfolio(0, simStrategy);
+  const portfolioWithExtra = simulatePortfolio(simBudget, simStrategy);
+  const maxMonths = Math.max(1, ...portfolioNoExtra.map(x=>x.paidMonth||0));
+
+  root.innerHTML = `
+    <div class="sim-grid">
+      <div class="sim-card">
+        <h3>① 個別の繰上げ返済シミュレーション</h3>
+        <div class="field">
+          <label>対象の借入</label>
+          <select id="sim-debt-select">
+            ${state.debts.map(x=>`<option value="${x.id}" ${x.id===simSelectedId?'selected':''}>${escapeHTML(x.name)}（残高 ${fmtYen(x.balance)}）</option>`).join('')}
+          </select>
+        </div>
+        <div class="slider-row">
+          <span style="font-size:12.5px;color:var(--muted);width:110px;">毎月の追加返済</span>
+          <input type="range" id="sim-extra-range" min="0" max="100000" step="1000" value="${simExtra}">
+          <span class="slider-val mono">+${fmtYen(simExtra)}</span>
+        </div>
+        <div class="compare-row"><span>現状の月々返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned)}</span></div>
+        <div class="compare-row"><span>追加後の月々返済額</span><span class="v mono">${fmtYen(d.monthlyPlanned+simExtra)}</span></div>
+        <div class="compare-row"><span>完済予定日（現状）</span><span class="v mono">${fmtDate(basePayoff)}</span></div>
+        <div class="compare-row"><span>完済予定日（追加後）</span><span class="v mono" style="color:var(--sage)">${fmtDate(extraPayoff)}</span></div>
+        <div class="compare-row"><span>短縮される期間</span><span class="v mono" style="color:var(--sage)">${monthsSaved>0? monthsSaved+' ヶ月早まる' : '—'}</span></div>
+        <div class="compare-row"><span>軽減される利息</span><span class="v mono" style="color:var(--sage)">${interestSaved>0? fmtYen(interestSaved):'¥0'}</span></div>
+        ${base.impossible?`<div class="hint" style="color:var(--rust);margin-top:8px;">現在の返済額では利息が上回り完済しません。返済額を見直してください。</div>`:''}
+      </div>
+
+      <div class="sim-card">
+        <h3>② 全体の返済戦略（複数借入がある場合）</h3>
+        <div class="strategy-toggle">
+          <button class="toggle-btn ${simStrategy==='avalanche'?'active':''}" data-strategy="avalanche">雪崩式（金利が高い順）</button>
+          <button class="toggle-btn ${simStrategy==='snowball'?'active':''}" data-strategy="snowball">雪だるま式（残高が少ない順）</button>
+        </div>
+        <div class="slider-row">
+          <span style="font-size:12.5px;color:var(--muted);width:110px;">追加できる総予算</span>
+          <input type="range" id="sim-budget-range" min="0" max="150000" step="5000" value="${simBudget}">
+          <span class="slider-val mono">+${fmtYen(simBudget)}/月</span>
+        </div>
+        <div style="margin-top:16px;">
+          ${portfolioWithExtra.sort((a,b)=>(a.paidMonth||999)-(b.paidMonth||999)).map(p=>{
+            const widthPct = Math.min(100,((p.paidMonth||maxMonths)/maxMonths)*100);
+            return `
+            <div class="gantt-row">
+              <div class="gantt-label">${escapeHTML(p.name)}</div>
+              <div class="gantt-track"><div class="gantt-bar" style="width:${widthPct}%"></div></div>
+              <div class="gantt-month">${p.paidMonth? p.paidMonth+'ヶ月後':'—'}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="hint" style="margin-top:10px;">追加予算なしの場合の全体完済：${Math.max(...portfolioNoExtra.map(x=>x.paidMonth||0))} ヶ月後 → 追加あり：<b style="color:var(--sage)">${Math.max(...portfolioWithExtra.map(x=>x.paidMonth||0))} ヶ月後</b></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('sim-debt-select').addEventListener('change', e=>{ simSelectedId = e.target.value; renderSim(); });
+  document.getElementById('sim-extra-range').addEventListener('input', e=>{ simExtra = Number(e.target.value); renderSim(); });
+  document.getElementById('sim-budget-range').addEventListener('input', e=>{ simBudget = Number(e.target.value); renderSim(); });
+  document.querySelectorAll('[data-strategy]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ simStrategy = btn.dataset.strategy; renderSim(); });
+  });
+}
+
+/* ---------- Calendar / payments tab ---------- */
+function renderCalendar(){
+  const root = document.getElementById('view-root');
+  const mk = monthKey();
+  const upcoming = [...state.debts].sort((a,b)=> new Date(nextDueDate(a)) - new Date(nextDueDate(b)));
+
+  const recent = [...state.payments].sort((a,b)=> b.paidDate.localeCompare(a.paidDate)).slice(0,10);
+
+  root.innerHTML = `
+    <div class="section-head"><h2>今後の返済期日</h2><div class="hint">${state.debts.length}件</div></div>
+    <div class="due-list">
+      ${upcoming.map(d=>dueRowHTML(d)).join('') || `<div class="empty">借入がありません。</div>`}
+    </div>
+
+    <div class="section-head"><h2>今月（${mk}）の支払実績</h2></div>
+    <div class="due-list">
+      ${state.debts.map(d=>{
+        const p = state.payments.find(x=>x.debtId===d.id && x.month===mk);
+        const actual = p? p.actualAmount : 0;
+        const diff = actual - d.monthlyPlanned;
+        return `
+        <div class="due-row">
+          <div class="due-info">
+            <div class="n">${escapeHTML(d.name)}</div>
+            <div class="s">予定 ${fmtYen(d.monthlyPlanned)}</div>
+          </div>
+          <div class="due-amt">
+            ${p? fmtYen(actual) : '<span style="color:var(--muted);font-weight:400;">未記録</span>'}
+            ${p? `<div style="font-size:11px;font-weight:400;color:${diff>=0?'var(--sage)':'var(--rust)'}">${diff>=0?'予算内':'予算未達 '+fmtYen(Math.abs(diff))}</div>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="section-head"><h2>支払履歴（直近10件）</h2></div>
+    <div class="due-list">
+      ${recent.map(p=>{
+        const d = state.debts.find(x=>x.id===p.debtId);
+        return `
+        <div class="due-row">
+          <div class="due-date-badge"><div class="d">${new Date(p.paidDate).getDate()}</div><div class="m">${new Date(p.paidDate).getMonth()+1}月</div></div>
+          <div class="due-info">
+            <div class="n">${d? escapeHTML(d.name) : '（削除済み）'}</div>
+            <div class="s">${p.month}分の支払</div>
+          </div>
+          <div class="due-amt">${fmtYen(p.actualAmount)}</div>
+        </div>`;
+      }).join('') || `<div class="empty">支払記録がまだありません。</div>`}
+    </div>
+  `;
+}
+
+/* =========================================================
+   Modals
+========================================================= */
+function openDebtModal(d=null){
+  const isEdit = !!d;
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="overlay" id="overlay">
+      <div class="modal">
+        <h3>${isEdit? '借入を編集':'借入を追加'}</h3>
+        <div class="field">
+          <label>名称</label>
+          <input id="f-name" value="${isEdit? escapeAttr(d.name):''}" placeholder="例：楽天カード">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>種別</label>
+            <select id="f-type">
+              <option value="card" ${d?.type==='card'?'selected':''}>カード</option>
+              <option value="person" ${d?.type==='person'?'selected':''}>個人</option>
+              <option value="company" ${d?.type==='company'?'selected':''}>法人</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>貸主 / 発行会社名</label>
+            <input id="f-lender" value="${isEdit? escapeAttr(d.lender||''):''}" placeholder="例：〇〇銀行">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>当初借入額</label>
+            <input id="f-initial" type="number" value="${isEdit? d.initialAmount:''}" placeholder="500000">
+          </div>
+          <div class="field">
+            <label>現在の残高</label>
+            <input id="f-balance" type="number" value="${isEdit? d.balance:''}" placeholder="320000">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>毎月の予定返済額</label>
+            <input id="f-monthly" type="number" value="${isEdit? d.monthlyPlanned:''}" placeholder="30000">
+          </div>
+          <div class="field">
+            <label>金利（年率 %・無ければ0）</label>
+            <input id="f-rate" type="number" step="0.1" value="${isEdit? d.interestRate:0}" placeholder="15.0">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>返済日（毎月何日）</label>
+            <input id="f-dueday" type="number" min="1" max="28" value="${isEdit? d.dueDay:27}">
+          </div>
+          <div class="field">
+            <label>借入開始日</label>
+            <input id="f-start" type="date" value="${isEdit? d.startDate:todayISO()}">
+          </div>
+        </div>
+        <div class="field">
+          <label>メモ</label>
+          <textarea id="f-notes" rows="2" placeholder="任意">${isEdit? escapeHTML(d.notes||''):''}</textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-cancel">キャンセル</button>
+          <button class="btn btn-primary" id="btn-save">${isEdit?'更新する':'追加する'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-cancel').addEventListener('click', closeModal);
+  document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+  document.getElementById('btn-save').addEventListener('click', ()=>{
+    const name = document.getElementById('f-name').value.trim();
+    if(!name){ alert('名称を入力してください'); return; }
+    const payload = {
+      name,
+      type: document.getElementById('f-type').value,
+      lender: document.getElementById('f-lender').value.trim(),
+      initialAmount: Number(document.getElementById('f-initial').value)||0,
+      balance: Number(document.getElementById('f-balance').value)||0,
+      monthlyPlanned: Number(document.getElementById('f-monthly').value)||0,
+      interestRate: Number(document.getElementById('f-rate').value)||0,
+      dueDay: Math.min(28, Math.max(1, Number(document.getElementById('f-dueday').value)||27)),
+      startDate: document.getElementById('f-start').value || todayISO(),
+      notes: document.getElementById('f-notes').value.trim(),
+    };
+    if(isEdit){
+      Object.assign(d, payload);
+    }else{
+      state.debts.push({id:uid(), ...payload});
+    }
+    save(state);
+    closeModal();
+    renderAll();
+  });
+}
+
+function openPaymentModal(debt=null){
+  const root = document.getElementById('modal-root');
+  const mk = monthKey();
+  root.innerHTML = `
+    <div class="overlay" id="overlay">
+      <div class="modal">
+        <h3>支払実績を記録</h3>
+        <div class="field">
+          <label>対象の借入</label>
+          <select id="p-debt">
+            ${state.debts.map(d=>`<option value="${d.id}" ${debt&&debt.id===d.id?'selected':''}>${escapeHTML(d.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>対象月</label>
+            <input id="p-month" type="month" value="${mk}">
+          </div>
+          <div class="field">
+            <label>支払日</label>
+            <input id="p-date" type="date" value="${todayISO()}">
+          </div>
+        </div>
+        <div class="field">
+          <label>実際の支払額</label>
+          <input id="p-amount" type="number" placeholder="30000">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btn-cancel">キャンセル</button>
+          <button class="btn btn-primary" id="btn-save">記録する</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('btn-cancel').addEventListener('click', closeModal);
+  document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+  document.getElementById('btn-save').addEventListener('click', ()=>{
+    const debtId = document.getElementById('p-debt').value;
+    const month = document.getElementById('p-month').value;
+    const paidDate = document.getElementById('p-date').value;
+    const actualAmount = Number(document.getElementById('p-amount').value)||0;
+    if(actualAmount<=0){ alert('支払額を入力してください'); return; }
+
+    const existing = state.payments.find(p=>p.debtId===debtId && p.month===month);
+    if(existing){ existing.actualAmount = actualAmount; existing.paidDate = paidDate; }
+    else{ state.payments.push({id:uid(), debtId, month, paidDate, actualAmount}); }
+
+    const d = state.debts.find(x=>x.id===debtId);
+    if(d) d.balance = Math.max(0, d.balance - actualAmount);
+
+    save(state);
+    closeModal();
+    renderAll();
+  });
+}
+
+function closeModal(){ document.getElementById('modal-root').innerHTML = ''; }
+
+/* =========================================================
+   Utils
+========================================================= */
+function escapeHTML(s=''){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s=''){ return escapeHTML(s); }
+
+/* =========================================================
+   Main render
+========================================================= */
+function renderAll(){
+  renderNav();
+  renderTopbar();
+  renderSidebarFoot();
+  if(currentTab==='dashboard') renderDashboard();
+  else if(currentTab==='debts') renderDebts();
+  else if(currentTab==='sim') renderSim();
+  else if(currentTab==='calendar') renderCalendar();
+}
+
+boot();
+</script>
+</body>
+</html>
